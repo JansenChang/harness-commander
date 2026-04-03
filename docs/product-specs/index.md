@@ -25,7 +25,7 @@
 
 - 本地项目目录：`/Users/jansen/project/python/harness-commander`
 - 本地 Git 状态：已初始化仓库，默认分支为 `main`
-- 当前本地提交：`1da179d docs: update repo setup status`
+- 初始化提交：`ffb8bf9 chore: initialize project`
 - Git 提交身份：`jansen <1028408511@qq.com>`
 - GitHub CLI 目标账号：`JansenChang`
 - GitHub CLI 认证状态：已重新登录成功，协议为 `https`
