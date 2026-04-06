@@ -1,6 +1,8 @@
 # Harness-Commander
 
-统一 Harness 生命周期治理命令入口，为 Claude、Codex、Trae 等开发者工具提供标准化的治理能力。
+Harness-Commander 是一个面向开发者与 AI coding workflows 的 Python CLI，用于把 spec、plan、verification、sync 和 evidence capture 串成一条可治理的工作流。
+
+> 项目当前处于 **early-stage / 0.x** 阶段。接口和行为可能继续演进，适合个人项目、原型和团队内试点，不承诺长期稳定兼容。
 
 ## 🎯 核心价值
 
@@ -15,13 +17,24 @@
 
 ```bash
 # 从源码安装
-git clone <repository-url>
+git clone https://github.com/JansenChang/harness-commander.git
 cd harness-commander
+python -m venv .venv
+source .venv/bin/activate
 pip install -e .
 
 # 验证安装
 harness --help
 ```
+
+### 30 秒最小示例
+
+```bash
+harness init -p /tmp/harness-demo
+harness --json -p /tmp/harness-demo distill /tmp/harness-demo/README.md
+```
+
+如果你看到初始化后的治理文件，以及 `distill` 返回的 JSON 结果，就说明本地安装已可用。
 
 ### 基本使用
 
@@ -230,15 +243,17 @@ Harness-Commander 支持完整的治理生命周期：
 
 ## 🐛 问题反馈
 
-遇到问题或需要新功能？
+欢迎通过 GitHub Issues 和 Pull Requests 反馈问题、提出建议或提交改进。
 
-1. 检查 `docs/exec-plans/tech-debt-tracker.md` 是否已记录类似问题
-2. 查看现有 Issue 或创建新 Issue
-3. 提供复现步骤、错误信息和环境详情
+提 issue 时建议附带：
+1. 复现步骤
+2. 错误输出或截图
+3. Python 版本与操作系统
+4. 你执行的 `harness` 命令
 
 ## 📄 许可证
 
-[请根据项目实际情况填写许可证信息]
+本项目基于 **MIT License** 开源。详见根目录 [LICENSE](LICENSE)。
 
 ---
 

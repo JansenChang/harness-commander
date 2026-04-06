@@ -5,8 +5,26 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "harness-commander"
 version = "0.1.0"
-description = "统一 Harness 生命周期治理命令入口"
+description = "A Python CLI for harness-style workflow governance across specs, plans, verification, and evidence capture."
+readme = "README.md"
 requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "Jansen Chang" },
+]
+keywords = ["cli", "developer-tools", "ai", "workflow", "governance"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Build Tools",
+    "Topic :: Software Development :: Documentation",
+]
 dependencies = []
 
 [project.optional-dependencies]
@@ -17,6 +35,11 @@ dev = [
     "black>=24.0.0",
     "isort>=5.13.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/JansenChang/harness-commander"
+Repository = "https://github.com/JansenChang/harness-commander"
+Issues = "https://github.com/JansenChang/harness-commander/issues"
 
 [project.scripts]
 harness = "harness_commander.cli:main"
