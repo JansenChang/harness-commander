@@ -11,3 +11,9 @@ uv 参考文件
 推荐用法：
 - AI 在补充依赖、更新环境或生成命令时先读取它
 - 如果项目不是 Python，也可以替换成对应生态的参考文件，例如 Maven、Gradle 或 pnpm
+
+当前项目补充约定：
+- 首轮 Python 骨架验证依赖 `pytest`
+- 如果执行 `python3 -m pytest` 报错 `No module named pytest`，先安装开发依赖，再继续验证
+- 优先使用 `python3 -m pip install pytest` 或等价的项目级依赖安装方式补齐测试依赖
+- 如果出现 `externally-managed-environment`，禁止直接污染系统 Python，改为在项目内创建 `.venv` 后再安装测试依赖

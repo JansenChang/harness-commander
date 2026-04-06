@@ -17,17 +17,10 @@
 - 新需求落地时，先登记到这里再细化文档
 - AI 在写业务逻辑前，先从这里找到对应 PRD
 
-## 当前待执行事项
+## 当前需求文档
 
-1. 已在个人 GitHub 私有仓库中创建 `harness-commander` 项目，并将当前目录初始化后的 Git 仓库推送上去。
+- `Harness-Commander`：`docs/product-specs/harness-commander.md`
+- `新用户引导`：`docs/product-specs/new-user-onboarding.md`
+- `Init 模板规范`：`docs/design-docs/init-templates.md`
+- `打包与 Skill 集成`：`docs/product-specs/packaging-as-skill.md`
 
-## 本次操作环境配置
-
-- 本地项目目录：`/Users/jansen/project/python/harness-commander`
-- 本地 Git 状态：已初始化仓库，默认分支为 `main`
-- 初始化提交：`ffb8bf9 chore: initialize project`
-- Git 提交身份：`jansen <1028408511@qq.com>`
-- GitHub CLI 目标账号：`JansenChang`
-- GitHub CLI 认证状态：已重新登录成功，协议为 `https`
-- GitHub 仓库地址：`https://github.com/JansenChang/harness-commander`
-- Git 远程：`origin -> https://github.com/JansenChang/harness-commander.git`

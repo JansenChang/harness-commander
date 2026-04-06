@@ -1,0 +1,233 @@
+"""端到端集成测试。
+
+该测试文件覆盖 Harness-Commander 的完整工作流程：
+从项目初始化到文档同步、信息提取、一致性检查的完整流程。
+"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SRC_PATH = PROJECT_ROOT / "src"
+if str(SRC_PATH) not in sys.path:
+    sys.path.insert(0, str(SRC_PATH))
+
+import json  # noqa: E402
+
+from harness_commander.cli import main  # noqa: E402
+
+
+def test_full_workflow_with_dry_run(tmp_path: Path, capsys) -> None:
+    """测试完整工作流程（使用 dry-run 模式）。"""
+
+    # 1. 初始化项目
+    exit_code = main(["-p", str(tmp_path), "init"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "[success] init" in captured.out
+
+    # 验证初始化创建的文件
+    assert (tmp_path / "ARCHITECTURE.md").exists()
+    assert (tmp_path / "docs/PLANS.md").exists()
+    assert (tmp_path / "docs/RELIABILITY.md").exists()
+    assert (tmp_path / "docs/SECURITY.md").exists()
+    assert (tmp_path / "docs/QUALITY_SCORE.md").exists()
+    assert (tmp_path / "docs/product-specs/index.md").exists()
+    assert (tmp_path / "docs/references/uv-llms.txt").exists()
+
+    # 2. 创建测试文档用于 distill 命令
+    test_doc = tmp_path / "test-document.md"
+    test_doc.write_text(
+        """# 测试文档
+
+## 业务目标
+测试 distill 命令的功能
+
+## 核心逻辑
+- 规则1: 测试规则提取
+- 规则2: 测试信息压缩
+
+## 技术实现
+使用 Python 实现
+""",
+        encoding="utf-8",
+    )
+
+    # 3. 运行 distill 命令（dry-run）
+    exit_code = main(["-p", str(tmp_path), "distill", str(test_doc), "--dry-run"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "[success] distill" in captured.out
+    assert "dry-run" in captured.out.lower()
+
+    # 4. 运行 check 命令（dry-run）
+    exit_code = main(["-p", str(tmp_path), "check", "--dry-run"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "[warning] check" in captured.out
+
+    # 5. 运行 sync 命令（dry-run）
+    exit_code = main(["-p", str(tmp_path), "sync", "--dry-run"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "[success] sync" in captured.out
+
+
+def test_json_output_consistency(tmp_path: Path, capsys) -> None:
+    """测试所有命令的 JSON 输出格式一致性。"""
+
+    # 初始化项目
+    exit_code = main(["-p", str(tmp_path), "init"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+
+    # 测试每个命令的 JSON 输出
+    commands_to_test = [
+        ["--json", "check"],
+        ["--json", "sync", "--dry-run"],
+    ]
+
+    for command_args in commands_to_test:
+        exit_code = main(["-p", str(tmp_path), *command_args])
+        captured = capsys.readouterr()
+        assert exit_code == 0
+
+        # 验证 JSON 输出格式
+        try:
+            result = json.loads(captured.out.strip())
+            assert "command" in result
+            assert "status" in result
+            assert "summary" in result
+            assert isinstance(result.get("artifacts", []), list)
+            assert isinstance(result.get("warnings", []), list)
+            assert isinstance(result.get("meta", {}), dict)
+        except json.JSONDecodeError as err:
+            raise AssertionError(
+                f"命令 {command_args[0]} 的输出不是有效的 JSON"
+            ) from err
+
+
+def test_command_chaining(tmp_path: Path, capsys) -> None:
+    """测试命令链式执行（一个命令的输出作为另一个命令的输入）。"""
+
+    # 初始化项目
+    exit_code = main(["-p", str(tmp_path), "init"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+
+    # 创建测试文档
+    test_doc = tmp_path / "requirements.md"
+    test_doc.write_text(
+        """# 需求文档
+
+## 业务目标
+构建一个测试系统
+
+## 核心需求
+1. 用户管理
+2. 权限控制
+3. 数据导出
+
+## 技术约束
+- 使用 Python 3.10+
+- 支持 JSON 输出
+- 包含完整的测试覆盖
+""",
+        encoding="utf-8",
+    )
+
+    # 运行 distill 命令并获取 JSON 输出
+    exit_code = main(["-p", str(tmp_path), "--json", "distill", str(test_doc)])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+
+    # 解析 distill 输出
+    distill_result = json.loads(captured.out.strip())
+    assert distill_result["command"] == "distill"
+    assert distill_result["status"] == "success"
+
+    # 验证 distill 生成了 artifacts
+    artifacts = distill_result.get("artifacts", [])
+    assert len(artifacts) > 0
+
+    # 运行 check 命令验证项目状态
+    exit_code = main(["-p", str(tmp_path), "--json", "check"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+
+    check_result = json.loads(captured.out.strip())
+    assert check_result["command"] == "check"
+    assert check_result["status"] == "warning"
+
+    meta = check_result.get("meta", {})
+    assert meta.get("blocking_count", 0) == 0
+    assert meta.get("warning_count", 0) >= 1
+    assert any(
+        warning["detail"]["severity"] == "warning"
+        for warning in check_result.get("warnings", [])
+    )
+
+
+def test_error_handling_and_recovery(tmp_path: Path, capsys) -> None:
+    """测试错误处理和恢复机制。"""
+
+    # 在不存在的路径上运行命令
+    non_existent_path = tmp_path / "non-existent"
+    exit_code = main(["-p", str(non_existent_path), "check"])
+    captured = capsys.readouterr()
+    assert exit_code != 0
+    assert "error" in captured.out.lower()
+
+    # 使用无效参数运行命令
+    exit_code = main(["-p", str(tmp_path), "distill", "non-existent-file.md"])
+    captured = capsys.readouterr()
+    assert exit_code != 0
+    assert "error" in captured.out.lower()
+
+    # 初始化项目后再次运行 check 命令应该成功
+    exit_code = main(["-p", str(tmp_path), "init"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+
+    exit_code = main(["-p", str(tmp_path), "check"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "[warning] check" in captured.out
+
+
+def test_template_validation_integration(tmp_path: Path, capsys) -> None:
+    """测试模板验证功能的集成。"""
+
+    # 初始化项目
+    exit_code = main(["-p", str(tmp_path), "init"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+
+    # 验证所有必需模板都已创建
+    required_templates = [
+        "ARCHITECTURE.md",
+        "docs/RELIABILITY.md",
+        "docs/SECURITY.md",
+        "docs/QUALITY_SCORE.md",
+        "docs/PLANS.md",
+    ]
+
+    for template in required_templates:
+        assert (tmp_path / template).exists(), f"必需模板缺失: {template}"
+
+        # 验证模板内容包含必需部分
+        content = (tmp_path / template).read_text(encoding="utf-8")
+        assert content.strip().startswith("# "), f"模板缺少标题: {template}"
+        assert "这个文件是做什么的" in content, f"模板缺少用途说明: {template}"
+        assert "推荐用法" in content, f"模板缺少推荐用法: {template}"
+
+    # 运行 check 命令验证模板结构
+    exit_code = main(["-p", str(tmp_path), "--json", "check"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+
+    result = json.loads(captured.out.strip())
+    meta = result.get("meta", {})
+    assert meta.get("error_count", 0) == 0, f"模板验证失败: {result}"
