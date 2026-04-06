@@ -123,7 +123,7 @@ def build_parser() -> argparse.ArgumentParser:
     distill_parser.add_argument(
         "-o",
         "--output",
-        help="输出 .llms 文件或目录路径，默认写入 docs/references/",
+        help="输出 .llms 文件或目录路径，默认写入 <root>/.llms/",
     )
     distill_parser.add_argument(
         "-i",
