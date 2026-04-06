@@ -191,21 +191,41 @@ def test_check_reports_blocking_issue_with_required_metadata(
     assert issue["detail"]["suggestion"]
 
 
-def test_check_marks_template_rules_as_unquantified_warning(
-    tmp_path: Path, capsys
-) -> None:
-    """check 命令在规则仍为说明模板时，应标记未量化而非伪造通过。"""
+def test_sync_returns_no_artifacts_when_no_major_change(tmp_path: Path, capsys) -> None:
+    """sync 在未识别到重大变更时不应生成同步产物。"""
 
     create_minimal_repo(tmp_path)
-    exit_code = main(["-p", str(tmp_path), "--json", "check"])
+    exit_code = main(["-p", str(tmp_path), "--json", "sync", "--dry-run"])
     captured = capsys.readouterr()
     payload = json.loads(captured.out)
 
     assert exit_code == 0
-    assert payload["status"] == "warning"
-    assert payload["meta"]["unquantified_count"] >= 1
-    assert any(
-        warning["code"] == "unquantified_rule_source"
-        and warning["detail"]["quantifiable"] is False
-        for warning in payload["warnings"]
-    )
+    assert payload["command"] == "sync"
+    assert payload["status"] == "success"
+    assert payload["meta"]["change_count"] == 0
+    assert payload["artifacts"] == []
+
+
+
+def test_sync_only_updates_impacted_artifacts(tmp_path: Path, capsys) -> None:
+    """sync 只更新被重大变更命中的目标产物。"""
+
+    create_minimal_repo(tmp_path)
+    migration_file = tmp_path / "migrations/0001_init.sql"
+    migration_file.parent.mkdir(parents=True, exist_ok=True)
+    migration_file.write_text("create table demo(id integer primary key);\n", encoding="utf-8")
+
+    exit_code = main(["-p", str(tmp_path), "--json", "sync", "--dry-run"])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert payload["meta"]["change_count"] == 1
+    assert payload["meta"]["change_types"] == ["database_schema"]
+    assert len(payload["artifacts"]) == 1
+    artifact = payload["artifacts"][0]
+    assert artifact["path"].endswith("docs/generated/db-schema.md")
+    assert artifact["action"] == "would_update"
+    assert "migrations/0001_init.sql" in artifact["note"]
+
+

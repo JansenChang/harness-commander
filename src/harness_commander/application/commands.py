@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import re
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -44,6 +45,42 @@ from harness_commander.infrastructure.templates import (
 )
 
 LOGGER = logging.getLogger(__name__)
+
+
+@dataclass(slots=True)
+class SyncRule:
+    """定义可触发 sync 的输入集合与目标产物。"""
+
+    change_type: str
+    trigger_roots: tuple[str, ...]
+    trigger_suffixes: tuple[str, ...]
+    target_path: str
+    reason: str
+
+
+SYNC_RULES: tuple[SyncRule, ...] = (
+    SyncRule(
+        change_type="database_schema",
+        trigger_roots=("migrations", "alembic", "db", "database", "schema"),
+        trigger_suffixes=(".sql", ".ddl", ".prisma"),
+        target_path="docs/generated/db-schema.md",
+        reason="检测到数据库结构或迁移相关重大变更，需要刷新数据库快照。",
+    ),
+    SyncRule(
+        change_type="tooling_reference",
+        trigger_roots=("scripts", "tools", "bin", "nixpacks"),
+        trigger_suffixes=(".nix", ".toml", ".yaml", ".yml", ".json"),
+        target_path="docs/references/nixpacks-llms.txt",
+        reason="检测到公共工具或打包配置变更，需要刷新工具参考材料。",
+    ),
+    SyncRule(
+        change_type="reference_source",
+        trigger_roots=("docs/reference-sources", "references/source"),
+        trigger_suffixes=(".md", ".txt", ".rst"),
+        target_path="docs/references/uv-llms.txt",
+        reason="检测到参考资料源文件变更，需要同步参考材料索引。",
+    ),
+)
 
 
 def run_init(root: Path, *, dry_run: bool) -> CommandResult:
@@ -271,53 +308,66 @@ def execute_command(
 
 
 def run_sync(root: Path, *, dry_run: bool) -> CommandResult:
-    """同步重大变更到文档目录。
-
-    该命令检测数据库结构、迁移文件、公共工具或参考目录的重大变更，
-    并更新受影响的 `docs/generated/` 或 `docs/references/` 文件。
-    """
+    """同步重大变更到文档目录。"""
 
     LOGGER.info("开始执行 sync 命令 root=%s dry_run=%s", root, dry_run)
 
-    # 检测变更的文件列表
-    # 这里实现变更检测逻辑，例如：
-    # 1. 检查数据库结构文件是否更新
-    # 2. 检查迁移文件是否新增
-    # 3. 检查公共工具是否变更
-    # 4. 检查参考目录是否有新内容
-
-    # 由于这是示例实现，我们假设检测到一些变更
-    detected_changes = [
-        {
-            "type": "database_schema",
-            "file": "docs/generated/db-schema.md",
-            "reason": "数据库结构已更新，需要同步最新结构",
-            "action": "would_update" if dry_run else "updated",
-        },
-        {
-            "type": "reference_document",
-            "file": "docs/references/design-system-reference-llms.txt",
-            "reason": "设计系统文档已更新，需要生成新的参考材料",
-            "action": "would_update" if dry_run else "updated",
-        },
-    ]
-
-    artifacts = []
-    for change in detected_changes:
-        artifact = CommandArtifact(
-            path=str(root / change["file"]),
-            kind="file",
-            action=change["action"],
-            note=f"同步变更：{change['reason']}",
+    if not root.exists() or not root.is_dir():
+        raise HarnessCommanderError(
+            code="invalid_root",
+            message="目标根目录不存在或不是目录，无法执行同步。",
+            location=str(root),
         )
-        artifacts.append(artifact)
 
-    change_count = len(detected_changes)
-    summary = (
-        f"同步完成，检测到 {change_count} 个重大变更需要同步到文档目录。"
-        if change_count > 0
-        else "未检测到需要同步的重大变更。"
-    )
+    trigger_files = _find_sync_triggers(root)
+    artifacts: list[CommandArtifact] = []
+    matched_changes: list[dict[str, Any]] = []
+
+    for rule in SYNC_RULES:
+        matched_inputs = [
+            relative_path
+            for relative_path in trigger_files
+            if _matches_sync_rule(relative_path, rule)
+            and relative_path != rule.target_path
+        ]
+        if not matched_inputs:
+            continue
+
+        target_path = root / rule.target_path
+        artifact = CommandArtifact(
+            path=str(target_path),
+            kind="file",
+            action="would_update" if dry_run else "updated",
+            note=(
+                f"{rule.reason} 触发来源: "
+                + ", ".join(matched_inputs[:3])
+                + (" 等" if len(matched_inputs) > 3 else "")
+            ),
+        )
+        if not dry_run:
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            target_path.write_text(
+                _render_sync_snapshot(rule, matched_inputs),
+                encoding="utf-8",
+                newline="\n",
+            )
+        artifacts.append(artifact)
+        matched_changes.append(
+            {
+                "type": rule.change_type,
+                "target": rule.target_path,
+                "inputs": matched_inputs,
+            }
+        )
+
+    change_count = len(matched_changes)
+    if change_count == 0:
+        summary = "未检测到需要同步的重大变更。"
+    else:
+        summary = (
+            f"同步完成，识别到 {change_count} 类重大变更，"
+            f"仅更新 {change_count} 个受影响产物。"
+        )
 
     LOGGER.info(
         "sync 命令执行完成 root=%s dry_run=%s change_count=%s",
@@ -335,7 +385,8 @@ def run_sync(root: Path, *, dry_run: bool) -> CommandResult:
             "root": str(root),
             "dry_run": dry_run,
             "change_count": change_count,
-            "change_types": list({c["type"] for c in detected_changes}),
+            "change_types": [change["type"] for change in matched_changes],
+            "changes": matched_changes,
         },
     )
 
@@ -612,6 +663,53 @@ def _relative_location(path: Path, root: Path) -> str:
         return str(path.relative_to(root))
     except ValueError:
         return str(path)
+
+
+
+def _find_sync_triggers(root: Path) -> list[str]:
+    """收集可能触发文档同步的输入文件。"""
+
+    ignored_parts = {".git", ".venv", "venv", "build", "dist", "__pycache__"}
+    ignored_roots = {"docs/generated/evidence"}
+    trigger_files: list[Path] = []
+    for path in root.rglob("*"):
+        if not path.is_file():
+            continue
+        relative = _relative_location(path, root)
+        if any(part in ignored_parts for part in path.parts):
+            continue
+        if any(
+            relative == ignored or relative.startswith(f"{ignored}/")
+            for ignored in ignored_roots
+        ):
+            continue
+        trigger_files.append(path)
+    return sorted({_relative_location(path, root) for path in trigger_files})
+
+
+def _matches_sync_rule(relative_path: str, rule: SyncRule) -> bool:
+    """判断某个文件是否命中指定 sync 规则。"""
+
+    normalized = relative_path.replace("\\", "/")
+    return any(
+        normalized == trigger_root or normalized.startswith(f"{trigger_root}/")
+        for trigger_root in rule.trigger_roots
+    )
+
+
+def _render_sync_snapshot(rule: SyncRule, matched_inputs: list[str]) -> str:
+    """渲染同步产物内容，记录触发来源与更新时间。"""
+
+    lines = [
+        f"# {rule.change_type} sync snapshot",
+        "",
+        f"- target: {rule.target_path}",
+        f"- reason: {rule.reason}",
+        f"- synced_at: {utc_timestamp()}",
+        "- inputs:",
+    ]
+    lines.extend(f"  - {path}" for path in matched_inputs)
+    return "\n".join(lines) + "\n"
 
 
 def _build_check_issue(

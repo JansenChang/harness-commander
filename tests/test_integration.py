@@ -69,10 +69,15 @@ def test_full_workflow_with_dry_run(tmp_path: Path, capsys) -> None:
     assert "[warning] check" in captured.out
 
     # 5. 运行 sync 命令（dry-run）
+    migration_file = tmp_path / "migrations/0001_init.sql"
+    migration_file.parent.mkdir(parents=True, exist_ok=True)
+    migration_file.write_text("create table users(id integer primary key);\n", encoding="utf-8")
     exit_code = main(["-p", str(tmp_path), "sync", "--dry-run"])
     captured = capsys.readouterr()
     assert exit_code == 0
     assert "[success] sync" in captured.out
+    assert "would_update" in captured.out
+    assert "db-schema.md" in captured.out
 
 
 def test_json_output_consistency(tmp_path: Path, capsys) -> None:
@@ -82,6 +87,10 @@ def test_json_output_consistency(tmp_path: Path, capsys) -> None:
     exit_code = main(["-p", str(tmp_path), "init"])
     captured = capsys.readouterr()
     assert exit_code == 0
+
+    migration_file = tmp_path / "migrations/0001_init.sql"
+    migration_file.parent.mkdir(parents=True, exist_ok=True)
+    migration_file.write_text("create table audit(id integer primary key);\n", encoding="utf-8")
 
     # 测试每个命令的 JSON 输出
     commands_to_test = [
@@ -138,6 +147,10 @@ def test_command_chaining(tmp_path: Path, capsys) -> None:
         encoding="utf-8",
     )
 
+    migration_file = tmp_path / "migrations/0001_init.sql"
+    migration_file.parent.mkdir(parents=True, exist_ok=True)
+    migration_file.write_text("create table reports(id integer primary key);\n", encoding="utf-8")
+
     # 运行 distill 命令并获取 JSON 输出
     exit_code = main(["-p", str(tmp_path), "--json", "distill", str(test_doc)])
     captured = capsys.readouterr()
@@ -151,6 +164,15 @@ def test_command_chaining(tmp_path: Path, capsys) -> None:
     # 验证 distill 生成了 artifacts
     artifacts = distill_result.get("artifacts", [])
     assert len(artifacts) > 0
+
+    sync_exit_code = main(["-p", str(tmp_path), "--json", "sync"])
+    sync_captured = capsys.readouterr()
+    assert sync_exit_code == 0
+    sync_result = json.loads(sync_captured.out.strip())
+    assert sync_result["command"] == "sync"
+    assert sync_result["status"] == "success"
+    assert sync_result["meta"]["change_count"] == 1
+    assert sync_result["artifacts"][0]["path"].endswith("docs/generated/db-schema.md")
 
     # 运行 check 命令验证项目状态
     exit_code = main(["-p", str(tmp_path), "--json", "check"])
