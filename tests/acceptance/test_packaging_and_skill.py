@@ -5,13 +5,41 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
+import sysconfig
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 INSTALL_SCRIPT = REPO_ROOT / "install-skill.sh"
 UNINSTALL_SCRIPT = REPO_ROOT / "uninstall-skill.sh"
 SKILL_FILE = REPO_ROOT / "claude-skills/harness/SKILL.md"
 PROJECT_SKILL_FILE = REPO_ROOT / ".claude/skills/harness/SKILL.md"
+VENV_BIN_DIR = sysconfig.get_path("scripts") or str(Path(sys.executable).resolve().parent)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def ensure_editable_install() -> None:
+    """在当前测试解释器环境中完成可编辑安装。"""
+
+    result = subprocess.run(
+        [sys.executable, "-m", "pip", "install", "-e", "."],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=harness_env(),
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def harness_env() -> dict[str, str]:
+    """返回包含当前虚拟环境脚本目录的 PATH。"""
+
+    env = os.environ.copy()
+    env["PATH"] = f"{VENV_BIN_DIR}{os.pathsep}{env.get('PATH', '')}"
+    return env
 
 
 def test_harness_help_from_editable_install() -> None:
@@ -23,6 +51,7 @@ def test_harness_help_from_editable_install() -> None:
         capture_output=True,
         text=True,
         check=False,
+        env=harness_env(),
     )
     assert result.returncode == 0, result.stderr
     assert "Harness-Commander 统一命令入口" in result.stdout
@@ -51,6 +80,7 @@ def test_install_and_uninstall_skill_scripts_manage_project_skill() -> None:
         capture_output=True,
         text=True,
         check=False,
+        env=harness_env(),
     )
     assert install_result.returncode == 0, install_result.stderr
     assert PROJECT_SKILL_FILE.exists()
@@ -62,6 +92,7 @@ def test_install_and_uninstall_skill_scripts_manage_project_skill() -> None:
         capture_output=True,
         text=True,
         check=False,
+        env=harness_env(),
     )
     assert uninstall_result.returncode == 0, uninstall_result.stderr
     assert not PROJECT_SKILL_FILE.exists()
@@ -92,6 +123,7 @@ def test_skill_smoke_init_and_distill(tmp_path: Path) -> None:
         capture_output=True,
         text=True,
         check=False,
+        env=harness_env(),
     )
     assert init_result.returncode == 0, init_result.stderr
     init_payload = json.loads(init_result.stdout)
@@ -110,6 +142,7 @@ def test_skill_smoke_init_and_distill(tmp_path: Path) -> None:
         capture_output=True,
         text=True,
         check=False,
+        env=harness_env(),
     )
     assert distill_result.returncode == 0, distill_result.stderr
     distill_payload = json.loads(distill_result.stdout)

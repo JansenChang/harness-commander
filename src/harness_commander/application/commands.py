@@ -1101,7 +1101,7 @@ def run_check(root: Path, *, dry_run: bool) -> CommandResult:
             )
 
     plan_files = sorted((root / "docs/exec-plans/active").glob("*.md")) if (root / "docs/exec-plans/active").exists() else []
-    generated_files = []
+    generated_files: list[Path] = []
     for generated_root in (root / "docs/generated", root / "docs/references"):
         if generated_root.exists():
             generated_files.extend(path for path in generated_root.rglob("*") if path.is_file())

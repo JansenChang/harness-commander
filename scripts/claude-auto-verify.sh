@@ -30,6 +30,7 @@ run_step() {
 cd "$ROOT" || exit 1
 
 failed=0
+run_step "editable install" "$ROOT/.venv/bin/python" -m pip install -e "$ROOT" || failed=1
 run_step "pytest" "$ROOT/.venv/bin/pytest" || failed=1
 run_step "mypy src" "$ROOT/.venv/bin/mypy" "$ROOT/src" || failed=1
 run_step "acceptance smoke" "$ROOT/.venv/bin/pytest" "$ROOT/tests/acceptance/test_packaging_and_skill.py" || failed=1
