@@ -17,3 +17,4 @@ uv 参考文件
 - 如果执行 `python3 -m pytest` 报错 `No module named pytest`，先安装开发依赖，再继续验证
 - 优先使用 `python3 -m pip install pytest` 或等价的项目级依赖安装方式补齐测试依赖
 - 如果出现 `externally-managed-environment`，禁止直接污染系统 Python，改为在项目内创建 `.venv` 后再安装测试依赖
+
