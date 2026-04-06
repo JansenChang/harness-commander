@@ -11,11 +11,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from harness_commander.domain.models import CommandMessage, HarnessCommanderError
-from harness_commander.infrastructure.templates import INIT_FILE_TEMPLATES
 from harness_commander.infrastructure.filesystem import (
     next_available_path,
     slugify,
     utc_timestamp,
+)
+from harness_commander.infrastructure.templates import (
+    INIT_FILE_TEMPLATES,
+    INIT_TEMPLATE_FILES,
+    get_template_resource_path,
 )
 
 REQUIRED_GOVERNANCE_FILES = [
@@ -211,33 +215,17 @@ def validate_plan_document(root: Path, plan_path: Path) -> PlanValidationResult:
 
 
 def load_init_templates(root: Path) -> TemplateLoadResult:
-    """从 docs/design-docs/init-templates.md 加载初始化模板。"""
+    """从包内模板资源加载初始化模板。"""
 
     LOGGER = logging.getLogger(__name__)
-    templates_path = root / "docs/design-docs/init-templates.md"
-    if not templates_path.exists():
-        LOGGER.warning(
-            "初始化模板文件缺失，使用内置模板 templates_path=%s",
-            templates_path,
-        )
-        return TemplateLoadResult(
-            templates=INIT_FILE_TEMPLATES.copy(),
-            warnings=[
-                CommandMessage(
-                    code="init_template_fallback",
-                    message="初始化模板文件缺失，已回退到内置模板。",
-                    location=str(templates_path),
-                )
-            ],
-            source="builtin",
-        )
 
     try:
-        content = templates_path.read_text(encoding="utf-8")
+        templates = _load_templates_from_package_resources()
     except Exception as error:
+        fallback_location = str(get_template_resource_path("AGENTS.md"))
         LOGGER.warning(
-            "无法读取初始化模板文件，使用内置模板 templates_path=%s error=%s",
-            templates_path,
+            "无法读取包内初始化模板资源，使用内置模板 fallback_location=%s error=%s",
+            fallback_location,
             error,
         )
         return TemplateLoadResult(
@@ -245,82 +233,36 @@ def load_init_templates(root: Path) -> TemplateLoadResult:
             warnings=[
                 CommandMessage(
                     code="init_template_fallback",
-                    message="初始化模板文件无法读取，已回退到内置模板。",
-                    location=str(templates_path),
+                    message="包内初始化模板资源无法读取，已回退到内置模板。",
+                    location=fallback_location,
                     detail={"reason": str(error)},
                 )
             ],
-            source="builtin",
+            source="builtin_fallback",
         )
 
-    templates = parse_template_content(content)
-    if not templates:
-        LOGGER.warning(
-            "初始化模板文件解析为空，使用内置模板 templates_path=%s",
-            templates_path,
-        )
-        return TemplateLoadResult(
-            templates=INIT_FILE_TEMPLATES.copy(),
-            warnings=[
-                CommandMessage(
-                    code="init_template_fallback",
-                    message="初始化模板文件损坏或解析为空，已回退到内置模板。",
-                    location=str(templates_path),
-                )
-            ],
-            source="builtin",
-        )
-    return TemplateLoadResult(templates=templates, warnings=[], source="external")
+    return TemplateLoadResult(
+        templates=templates,
+        warnings=[],
+        source="package_resources",
+    )
 
 
-def parse_template_content(content: str) -> dict[str, str]:
-    """解析模板文件内容，提取文件路径和模板内容。
+def _load_templates_from_package_resources() -> dict[str, str]:
+    """读取全部包内模板资源，并按 init 输出路径返回。"""
 
-    模板文件格式：
-    #### 文件路径 模板
-    ```markdown
-    模板内容
-    ```
+    templates: dict[str, str] = {}
+    missing_templates: list[str] = []
 
-    返回:
-        模板字典，键为文件路径，值为模板内容
-    """
-    templates = {}
-    lines = content.split("\n")
-    i = 0
+    for template_path in sorted(INIT_TEMPLATE_FILES):
+        resource_path = get_template_resource_path(template_path)
+        if not resource_path.exists():
+            missing_templates.append(template_path)
+            continue
+        templates[template_path] = resource_path.read_text(encoding="utf-8").rstrip("\n")
 
-    while i < len(lines):
-        line = lines[i].strip()
-        # 查找文件标题行，格式为 "#### 文件路径 模板"
-        if line.startswith("#### ") and "模板" in line:
-            # 提取文件路径，例如 "AGENTS.md 模板"
-            path_part = line[5:].replace(" 模板", "").strip()
+    if missing_templates:
+        missing_list = ", ".join(missing_templates)
+        raise FileNotFoundError(f"缺少包内模板资源: {missing_list}")
 
-            # 查找代码块开始
-            i += 1
-            while i < len(lines) and not lines[i].strip().startswith("```markdown"):
-                i += 1
-
-            if i >= len(lines):
-                break
-
-            # 跳过代码块开始标记
-            i += 1
-            template_lines = []
-
-            # 收集模板内容直到代码块结束
-            while i < len(lines) and not lines[i].strip().startswith("```"):
-                template_lines.append(lines[i])
-                i += 1
-
-            # 跳过代码块结束标记
-            i += 1
-
-            template_content = "\n".join(template_lines).rstrip("\n")
-            if template_content:
-                templates[path_part] = template_content
-
-        i += 1
-
-    # 如果模板文件解析失败或为空，返回空字典（调用方应处理这种情况）
     return templates

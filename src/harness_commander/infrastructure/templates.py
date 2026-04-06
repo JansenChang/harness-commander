@@ -4,15 +4,39 @@
 避免模板内容散落在命令编排层，影响可维护性与后续扩展。
 
 ## 模板版本控制
-- 版本: 1.0.0
-- 最后更新: 2026-04-04
-- 兼容性: 向后兼容，新增模板不会影响现有项目
+- 版本: 1.1.0
+- 最后更新: 2026-04-06
+- 兼容性: 包内模板资源优先，内置模板继续作为兜底回退
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+
+PACKAGE_ROOT = Path(__file__).resolve().parent.parent
+INIT_TEMPLATE_RESOURCE_DIR = PACKAGE_ROOT / "init_templates"
+
+INIT_TEMPLATE_FILES = {
+    "AGENTS.md": "AGENTS.md",
+    "ARCHITECTURE.md": "ARCHITECTURE.md",
+    "docs/DESIGN.md": "docs/DESIGN.md",
+    "docs/FRONTEND.md": "docs/FRONTEND.md",
+    "docs/PLANS.md": "docs/PLANS.md",
+    "docs/PRODUCT_SENSE.md": "docs/PRODUCT_SENSE.md",
+    "docs/QUALITY_SCORE.md": "docs/QUALITY_SCORE.md",
+    "docs/RELIABILITY.md": "docs/RELIABILITY.md",
+    "docs/SECURITY.md": "docs/SECURITY.md",
+    "docs/design-docs/index.md": "docs/design-docs/index.md",
+    "docs/design-docs/core-beliefs.md": "docs/design-docs/core-beliefs.md",
+    "docs/exec-plans/tech-debt-tracker.md": "docs/exec-plans/tech-debt-tracker.md",
+    "docs/generated/db-schema.md": "docs/generated/db-schema.md",
+    "docs/product-specs/index.md": "docs/product-specs/index.md",
+    "docs/product-specs/new-user-onboarding.md": "docs/product-specs/new-user-onboarding.md",
+    "docs/references/design-system-reference-llms.txt": "docs/references/design-system-reference-llms.txt",
+    "docs/references/nixpacks-llms.txt": "docs/references/nixpacks-llms.txt",
+    "docs/references/uv-llms.txt": "docs/references/uv-llms.txt",
+}
 
 INIT_DIRECTORIES = [
     "docs/design-docs",
@@ -396,10 +420,11 @@ INIT_FILE_TEMPLATES = {
 
 # 模板元数据
 TEMPLATE_METADATA = {
-    "version": "1.0.0",
-    "last_updated": "2026-04-04",
+    "version": "1.1.0",
+    "last_updated": "2026-04-06",
     "template_count": len(INIT_FILE_TEMPLATES),
     "directory_count": len(INIT_DIRECTORIES),
+    "resource_template_count": len(INIT_TEMPLATE_FILES),
 }
 
 
@@ -493,6 +518,13 @@ def list_templates() -> list[str]:
         按字母顺序排序的模板路径列表
     """
     return sorted(INIT_FILE_TEMPLATES.keys())
+
+
+def get_template_resource_path(template_path: str) -> Path:
+    """获取指定模板对应的包内资源路径。"""
+
+    relative_resource = INIT_TEMPLATE_FILES[template_path]
+    return INIT_TEMPLATE_RESOURCE_DIR / relative_resource
 
 
 # 白名单校验相关

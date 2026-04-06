@@ -17,6 +17,7 @@ if str(SRC_PATH) not in sys.path:
 import json  # noqa: E402
 
 from harness_commander.cli import main  # noqa: E402
+from harness_commander.infrastructure import docs as docs_infra  # noqa: E402
 
 
 def create_minimal_repo(root: Path) -> None:
@@ -113,6 +114,42 @@ def test_init_command_supports_explicit_target_project_path(
     assert (target_project / "docs/design-docs/core-beliefs.md").exists()
 
 
+def test_init_command_reports_package_template_source_in_json(
+    tmp_path: Path, capsys
+) -> None:
+    """init 命令默认应从包内模板资源加载内容。"""
+
+    exit_code = main(["-p", str(tmp_path), "--json", "init"])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert payload["command"] == "init"
+    assert payload["status"] == "success"
+    assert payload["meta"]["template_source"] == "package_resources"
+    assert payload["warnings"] == []
+
+
+def test_init_command_ignores_docs_template_spec_file(tmp_path: Path, capsys) -> None:
+    """init 命令不应把 docs 里的模板规范文档当作运行时模板源。"""
+
+    spec_file = tmp_path / "docs/design-docs/init-templates.md"
+    spec_file.parent.mkdir(parents=True, exist_ok=True)
+    spec_file.write_text(
+        "# fake spec\n\n## AGENTS.md 模板\n```markdown\n# broken\n```\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(["-p", str(tmp_path), "init"])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "[success] init" in captured.out
+    agents_content = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
+    assert "# broken" not in agents_content
+    assert "用于定义 AI 在本项目中的身份、语气、决策边界和默认工作方式。" in agents_content
+
+
 def test_init_command_skips_existing_files_without_overwriting(
     tmp_path: Path, capsys
 ) -> None:
@@ -164,6 +201,32 @@ def test_collect_evidence_persists_failed_command_context(
     assert payload["command"] == "pytest"
     assert payload["exit_code"] == 1
     assert payload["logs"] == ["line one", "line two"]
+
+
+def test_load_init_templates_falls_back_when_package_resource_is_missing() -> None:
+    """包内模板资源缺失时应回退到内置模板并返回 warning。"""
+
+    missing_template = "AGENTS.md"
+    original_get_path = docs_infra.get_template_resource_path
+
+    def fake_get_template_resource_path(template_path: str) -> Path:
+        if template_path == missing_template:
+            return Path("/definitely-missing-init-template.md")
+        return original_get_path(template_path)
+
+    docs_infra.get_template_resource_path = fake_get_template_resource_path
+    try:
+        result = docs_infra.load_init_templates(Path("/tmp/unused-root"))
+    finally:
+        docs_infra.get_template_resource_path = original_get_path
+
+    assert result.source == "builtin_fallback"
+    assert result.templates == docs_infra.INIT_FILE_TEMPLATES
+    assert len(result.warnings) == 1
+    warning = result.warnings[0]
+    assert warning.code == "init_template_fallback"
+    assert warning.location == "/definitely-missing-init-template.md"
+    assert missing_template in warning.detail["reason"]
 
 
 def test_check_reports_blocking_issue_with_required_metadata(

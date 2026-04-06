@@ -19,8 +19,5 @@
 
 ## 当前需求文档
 
-- `Harness-Commander`：`docs/product-specs/harness-commander.md`
 - `新用户引导`：`docs/product-specs/new-user-onboarding.md`
-- `Init 模板规范`：`docs/design-docs/init-templates.md`（说明运行时包内模板资源的规范与内容基线）
-- `打包与 Skill 集成`：`docs/product-specs/packaging-as-skill.md`
 

@@ -190,7 +190,7 @@ harness sync -p /path/to/project --dry-run
 
 ### 自定义模板
 
-初始化文件模板可在 `docs/design-docs/init-templates.md` 中自定义，适应团队特定需求。
+初始化文件模板由 `src/harness_commander/init_templates/` 中的包内资源提供，`docs/design-docs/init-templates.md` 负责说明模板规范与内容基线。
 
 ## 🔄 生命周期管理
 

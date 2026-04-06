@@ -23,7 +23,7 @@
 - [关键规则 12]: 统一命令入口固定为 `harness <command> [options]`，不同开发者工具不得重命名核心命令。
 - [关键规则 13]: 所有命令必须支持人类可读摘要和机器可解析结果，供开发者工具展示与自动处理。
 - [关键规则 14]: `harness init` 的默认补齐清单必须严格限定在以下目录与文件：`AGENTS.md`、`ARCHITECTURE.md`、`docs/DESIGN.md`、`docs/FRONTEND.md`、`docs/PLANS.md`、`docs/PRODUCT_SENSE.md`、`docs/QUALITY_SCORE.md`、`docs/RELIABILITY.md`、`docs/SECURITY.md`、`docs/design-docs/index.md`、`docs/design-docs/core-beliefs.md`、`docs/exec-plans/active/`、`docs/exec-plans/completed/`、`docs/exec-plans/tech-debt-tracker.md`、`docs/generated/db-schema.md`、`docs/product-specs/index.md`、`docs/product-specs/new-user-onboarding.md`、`docs/references/design-system-reference-llms.txt`、`docs/references/nixpacks-llms.txt`、`docs/references/uv-llms.txt`。
-- [关键规则 15]: `harness init` 创建文件时必须使用 `docs/design-docs/init-templates.md` 中定义的模板内容，确保不同项目初始化后具有一致的文档格式和结构标准。
+- [关键规则 15]: `harness init` 创建文件时必须使用 `src/harness_commander/init_templates/` 下的包内模板资源，确保不同项目初始化后具有一致的文档格式和结构标准。
 - [关键规则 16]: `harness init` 不得在目标项目中额外创建 `src/`、`tests/`、`.venv/`、`venv/`、`dist/`、`build/`、`docs/generated/evidence/` 或任何未在白名单中的目录与文件。
 
 ## 3. 验收标准 (Acceptance Criteria - AC)
@@ -41,7 +41,7 @@
 - AC 12: 所有会改写文件的命令必须支持 `--dry-run`，用于先展示将发生的变更，再决定是否落盘。
 - AC 13: `harness init -p <path>` 执行完成后，目标目录必须至少具备以下结构：`AGENTS.md`、`ARCHITECTURE.md`、`docs/DESIGN.md`、`docs/FRONTEND.md`、`docs/PLANS.md`、`docs/PRODUCT_SENSE.md`、`docs/QUALITY_SCORE.md`、`docs/RELIABILITY.md`、`docs/SECURITY.md`、`docs/design-docs/`、`docs/exec-plans/active/`、`docs/exec-plans/completed/`、`docs/generated/db-schema.md`、`docs/product-specs/index.md`、`docs/product-specs/new-user-onboarding.md`、`docs/references/`。
 - AC 14: `harness init -p <path>` 执行完成后，目标目录中不得出现 `src/`、`tests/`、`.venv/`、`venv/`、`dist/`、`build/`、`docs/generated/evidence/` 或任何未列入默认补齐清单的额外目录与文件。
-- AC 15: `harness init` 创建文件时必须使用 `docs/design-docs/init-templates.md` 中定义的模板内容，模板内容必须包含明确的用途说明、适合内容范围和推荐用法三个核心章节。
+- AC 15: `harness init` 创建文件时必须使用 `src/harness_commander/init_templates/` 下的包内模板资源，模板内容必须包含明确的用途说明、适合内容范围和推荐用法三个核心章节。
 - AC 16: `harness init` 创建的模板文件编码必须为 UTF-8，换行符必须为 LF（Unix 风格），且不得包含项目特定的配置信息。
 
 ## 4. 异常处理 (Edge Cases)
@@ -55,6 +55,6 @@
 - 当输入文档过长、代码目录过大或大模型无法可靠提炼重点时，`harness distill` 必须输出失败摘要，说明大模型压缩能力的限制，而不是生成不完整或有误导性的参考材料。
 - 当规则文档仍是说明型模板、无法形成机器可判断条件时，`harness check` 必须将对应项标记为“未量化”，不得伪造通过结果。
 - 当测试命令未配置、命令不存在或返回异常时，`harness collect-evidence` 仍需生成证据文件，并记录“验证未执行成功”的原因。
-- 当模板规范文档 `docs/design-docs/init-templates.md` 缺失或损坏时，`harness init` 必须使用内置的默认模板进行初始化，并在结果中记录模板规范缺失警告。
+- 当包内模板资源 `src/harness_commander/init_templates/` 缺失或损坏时，`harness init` 必须使用内置的默认模板进行初始化，并在结果中记录模板回退警告。
 - 当模板文件内容因编码问题无法正确写入时，`harness init` 必须记录失败原因并继续处理其他文件，不允许因单个文件失败而中断整个初始化过程。
 - 当模板内容包含特殊字符或换行符问题时，`harness init` 必须在创建前进行规范化处理，确保生成的文件符合编码规范。

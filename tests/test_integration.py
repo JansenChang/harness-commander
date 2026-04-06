@@ -253,3 +253,26 @@ def test_template_validation_integration(tmp_path: Path, capsys) -> None:
     result = json.loads(captured.out.strip())
     meta = result.get("meta", {})
     assert meta.get("error_count", 0) == 0, f"模板验证失败: {result}"
+
+
+def test_init_uses_package_templates_even_if_docs_spec_exists(
+    tmp_path: Path, capsys
+) -> None:
+    """即使仓库里存在模板规范文档，init 也应继续使用包内模板资源。"""
+
+    spec_file = tmp_path / "docs/design-docs/init-templates.md"
+    spec_file.parent.mkdir(parents=True, exist_ok=True)
+    spec_file.write_text(
+        "# fake spec\n\n## ARCHITECTURE.md 模板\n```markdown\n# wrong architecture\n```\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(["-p", str(tmp_path), "--json", "init"])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out.strip())
+
+    assert exit_code == 0
+    assert payload["meta"]["template_source"] == "package_resources"
+    architecture_content = (tmp_path / "ARCHITECTURE.md").read_text(encoding="utf-8")
+    assert "# wrong architecture" not in architecture_content
+    assert "用于描述系统的整体架构蓝图" in architecture_content
