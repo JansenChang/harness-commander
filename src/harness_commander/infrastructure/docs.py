@@ -224,7 +224,7 @@ def build_plan_context(request: str) -> PlanContext:
         "如果没有验证闭环，宿主工具无法稳定消费执行结果。",
     ]
     references = [*RECOMMENDED_PLAN_REFERENCES]
-    ulws = [
+    ulws: list[dict[str, object]] = [
         {
             "title": "ULW 1: 澄清需求并锁定边界",
             "goal": f"把“{normalized_request}”整理为清晰目标、范围、约束和风险。",
@@ -366,9 +366,11 @@ def _render_ulw_section(ulw: dict[str, object]) -> str:
 
 
 
-def _indent_bullets(items: list[object]) -> str:
+def _indent_bullets(items: object) -> str:
     """把列表项格式化为 markdown bullet。"""
 
+    if not isinstance(items, (list, tuple)):
+        return f"  - {items}"
     return "\n".join(f"  - {item}" for item in items)
 
 
