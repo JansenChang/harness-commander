@@ -192,6 +192,36 @@ def test_command_chaining(tmp_path: Path, capsys) -> None:
     )
 
 
+def test_check_reports_unquantified_rule_sources_in_summary(
+    tmp_path: Path, capsys
+) -> None:
+    """check 应在摘要和元信息中体现未量化规则源。"""
+
+    exit_code = main(["-p", str(tmp_path), "init"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+
+    (tmp_path / "docs/QUALITY_SCORE.md").write_text(
+        "质量说明\n\n暂时只有说明文本。\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(["-p", str(tmp_path), "--json", "check"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+
+    result = json.loads(captured.out.strip())
+    assert result["command"] == "check"
+    assert result["status"] == "warning"
+    assert result["meta"]["unquantified_count"] >= 1
+    assert result["meta"]["checks"]["all"]
+    assert any(
+        item["code"] == "unquantified_rule_source"
+        and item["detail"]["source"] == "docs/QUALITY_SCORE.md"
+        for item in result["meta"]["checks"]["all"]
+    )
+    assert "未量化" in result["summary"]
+
 def test_error_handling_and_recovery(tmp_path: Path, capsys) -> None:
     """测试错误处理和恢复机制。"""
 

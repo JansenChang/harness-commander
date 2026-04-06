@@ -247,11 +247,51 @@ def test_check_reports_blocking_issue_with_required_metadata(
     assert payload["command"] == "check"
     assert payload["status"] == "failure"
     assert payload["errors"]
+    assert payload["meta"]["blocking_reasons"] == ["检测到疑似敏感信息字面量或凭据字段。"]
     issue = payload["errors"][0]
     assert issue["detail"]["severity"] == "blocking"
     assert issue["detail"]["source"] == "docs/SECURITY.md"
     assert issue["location"] == "src/demo.py"
     assert issue["detail"]["suggestion"]
+    assert issue["detail"]["impact_scope"] == "仓库包含疑似明文凭据，存在泄露和误用风险。"
+    assert payload["summary"].startswith("审计完成，发现 1 个阻断项")
+
+
+def test_check_marks_template_only_governance_docs_as_unquantified(
+    tmp_path: Path, capsys
+) -> None:
+    """说明型规则文档应被标记为未量化，而不是伪造通过。"""
+
+    create_minimal_repo(tmp_path)
+    (tmp_path / "docs/QUALITY_SCORE.md").write_text(
+        "质量规范说明\n\n这个文件暂时只有说明文字，没有可检查条目。\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "docs/SECURITY.md").write_text(
+        "安全规范说明\n\n这里只描述背景，不提供列表规则。\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "docs/design-docs/core-beliefs.md").write_text(
+        "团队信仰说明\n\n当前仍在整理判断条件。\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(["-p", str(tmp_path), "--json", "check"])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert payload["status"] == "warning"
+    assert payload["meta"]["blocking_count"] == 0
+    assert payload["meta"]["unquantified_count"] == 3
+    assert len(payload["warnings"]) >= 4
+    unquantified_warnings = [
+        warning for warning in payload["warnings"] if warning["code"] == "unquantified_rule_source"
+    ]
+    assert len(unquantified_warnings) == 3
+    assert all(not warning["detail"]["quantifiable"] for warning in unquantified_warnings)
+    assert all("impact_scope" in warning["detail"] for warning in unquantified_warnings)
+    assert "未量化" in payload["summary"]
 
 
 def test_sync_returns_no_artifacts_when_no_major_change(tmp_path: Path, capsys) -> None:

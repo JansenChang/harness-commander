@@ -721,19 +721,24 @@ def _build_check_issue(
     location: str,
     suggestion: str,
     quantifiable: bool,
+    impact_scope: str | None = None,
 ) -> CommandMessage:
     """构造统一的审计问题对象。"""
+
+    detail = {
+        "severity": severity,
+        "source": source,
+        "suggestion": suggestion,
+        "quantifiable": quantifiable,
+    }
+    if impact_scope:
+        detail["impact_scope"] = impact_scope
 
     return CommandMessage(
         code=code,
         message=message,
         location=location,
-        detail={
-            "severity": severity,
-            "source": source,
-            "suggestion": suggestion,
-            "quantifiable": quantifiable,
-        },
+        detail=detail,
     )
 
 
@@ -781,20 +786,34 @@ def run_check(root: Path, *, dry_run: bool) -> CommandResult:
         "security": root / "docs/SECURITY.md",
         "core_beliefs": root / "docs/design-docs/core-beliefs.md",
     }
+    source_labels = {
+        "quality": "docs/QUALITY_SCORE.md",
+        "security": "docs/SECURITY.md",
+        "core_beliefs": "docs/design-docs/core-beliefs.md",
+    }
     blocking_issues: list[CommandMessage] = []
     warning_issues: list[CommandMessage] = []
 
     for source_name, source_path in governance_sources.items():
+        source_label = source_labels[source_name]
+        impact_scope = (
+            "无法完成基于质量、安全和团队信仰规则的审计。"
+            if source_name == "quality"
+            else "无法完成安全规则审计。"
+            if source_name == "security"
+            else "无法完成团队信仰规则审计。"
+        )
         if not source_path.exists():
             blocking_issues.append(
                 _build_check_issue(
                     code="missing_governance_source",
                     message="审计所需规则文档缺失。",
                     severity="blocking",
-                    source=source_name,
+                    source=source_label,
                     location=_relative_location(source_path, root),
                     suggestion="先补齐治理文档，再重新执行 harness check。",
                     quantifiable=True,
+                    impact_scope=impact_scope,
                 )
             )
             continue
@@ -805,10 +824,11 @@ def run_check(root: Path, *, dry_run: bool) -> CommandResult:
                     code="empty_governance_source",
                     message="审计所需规则文档为空，无法提供有效规则。",
                     severity="blocking",
-                    source=source_name,
+                    source=source_label,
                     location=_relative_location(source_path, root),
                     suggestion="补充可执行规则，再重新执行 harness check。",
                     quantifiable=True,
+                    impact_scope=impact_scope,
                 )
             )
             continue
@@ -818,10 +838,11 @@ def run_check(root: Path, *, dry_run: bool) -> CommandResult:
                     code="unquantified_rule_source",
                     message="规则文档仍以说明模板为主，缺少可量化判断条件。",
                     severity="warning",
-                    source=source_name,
+                    source=source_label,
                     location=_relative_location(source_path, root),
                     suggestion="把抽象说明补成可检查的条目或禁止项。",
                     quantifiable=False,
+                    impact_scope="当前规则源只能给出人工提醒，不能形成机器可判断结论。",
                 )
             )
 
@@ -832,10 +853,11 @@ def run_check(root: Path, *, dry_run: bool) -> CommandResult:
                 code="no_python_files_detected",
                 message="未检测到可审计的 Python 源码文件。",
                 severity="warning",
-                source="quality",
+                source="docs/QUALITY_SCORE.md",
                 location="src/",
                 suggestion="如果项目尚未进入实现阶段，可忽略；否则补齐源码后重跑审计。",
                 quantifiable=True,
+                impact_scope="当前只能校验治理文档，无法对实现代码执行质量与安全扫描。",
             )
         )
 
@@ -850,6 +872,7 @@ def run_check(root: Path, *, dry_run: bool) -> CommandResult:
                     location=_relative_location(path, root),
                     suggestion="移除硬编码敏感信息，改为环境变量或安全配置注入。",
                     quantifiable=True,
+                    impact_scope="仓库包含疑似明文凭据，存在泄露和误用风险。",
                 )
             )
 
@@ -866,6 +889,7 @@ def run_check(root: Path, *, dry_run: bool) -> CommandResult:
                         location=_relative_location(test_file, root),
                         suggestion="确认测试样例已脱敏，避免把真实密钥写入仓库。",
                         quantifiable=True,
+                        impact_scope="测试样例可能把真实凭据或可复用密钥暴露到仓库历史中。",
                     )
                 )
 
@@ -879,6 +903,7 @@ def run_check(root: Path, *, dry_run: bool) -> CommandResult:
                 location="tests/",
                 suggestion="补充测试目录与基础验证用例。",
                 quantifiable=True,
+                impact_scope="当前只能基于代码静态迹象给出审计结果，无法验证测试覆盖要求。",
             )
         )
 
@@ -909,15 +934,16 @@ def run_check(root: Path, *, dry_run: bool) -> CommandResult:
                     location=", ".join(unique_locations),
                     suggestion="确认是否应复用既有封装，避免基础能力出现多份实现。",
                     quantifiable=True,
+                    impact_scope="相近基础能力存在多份实现，后续维护和规则收敛成本会上升。",
                 )
             )
 
     total_issues = len(blocking_issues) + len(warning_issues)
-    unquantified_count = sum(
-        1 for issue in [*blocking_issues, *warning_issues] if not issue.detail["quantifiable"]
-    )
+    all_issues = [*blocking_issues, *warning_issues]
+    unquantified_count = sum(1 for issue in all_issues if not issue.detail["quantifiable"])
     blocking_count = len(blocking_issues)
     warning_count = len(warning_issues)
+    blocking_reasons = [issue.message for issue in blocking_issues]
 
     if blocking_issues:
         status = ResultStatus.FAILURE
@@ -930,6 +956,9 @@ def run_check(root: Path, *, dry_run: bool) -> CommandResult:
     else:
         status = ResultStatus.SUCCESS
         summary = "审计完成，质量、安全与团队信仰规则均未发现阻断问题。"
+
+    if unquantified_count:
+        summary = f"{summary} 其中 {unquantified_count} 项规则源仍未量化。"
 
     LOGGER.info(
         "check 命令执行完成 root=%s dry_run=%s blocking=%s warning=%s unquantified=%s",
@@ -954,9 +983,11 @@ def run_check(root: Path, *, dry_run: bool) -> CommandResult:
             "error_count": blocking_count,
             "issue_count": total_issues,
             "unquantified_count": unquantified_count,
+            "blocking_reasons": blocking_reasons,
             "checks": {
                 "blocking": [issue.to_dict() for issue in blocking_issues],
                 "warnings": [issue.to_dict() for issue in warning_issues],
+                "all": [issue.to_dict() for issue in all_issues],
             },
         },
     )
