@@ -17,6 +17,7 @@ if str(SRC_PATH) not in sys.path:
 
 import json  # noqa: E402
 
+from harness_commander.application import commands as command_exports  # noqa: E402
 from harness_commander.application.model_tasks import HostModelError  # noqa: E402
 from harness_commander.cli import main  # noqa: E402
 from harness_commander.infrastructure import docs as docs_infra  # noqa: E402
@@ -40,6 +41,22 @@ def create_minimal_repo(root: Path) -> None:
         path = root / relative_path
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
+
+
+def test_command_package_exports_all_cli_handlers() -> None:
+    """commands 包应统一导出 CLI 需要的处理函数。"""
+
+    for name in [
+        "execute_command",
+        "run_init",
+        "run_propose_plan",
+        "run_plan_check",
+        "run_collect_evidence",
+        "run_sync",
+        "run_distill",
+        "run_check",
+    ]:
+        assert hasattr(command_exports, name), f"缺少导出: {name}"
 
 
 def test_init_command_creates_missing_directories(tmp_path: Path, capsys) -> None:
@@ -264,87 +281,22 @@ def test_init_command_falls_back_to_builtin_templates_when_package_resource_miss
 
 
 def test_distill_marks_partial_extraction_as_warning(tmp_path: Path, capsys) -> None:
-    """distill 缺少部分章节但仍可提炼时应返回 warning。"""
+    """distill 缺少部分结构化字段时应返回 warning。"""
 
     create_minimal_repo(tmp_path)
     source_file = tmp_path / "brief.md"
     source_file.write_text(
-        "# 简短文档\n\n## 业务目标\n保留一个最小目标。\n",
+        "# 简短文档\n\n只有一点上下文。\n",
         encoding="utf-8",
     )
-
-    exit_code = main(["-p", str(tmp_path), "--json", "distill", str(source_file)])
-    captured = capsys.readouterr()
-    payload = json.loads(captured.out)
-
-    assert exit_code == 0
-    assert payload["status"] == "warning"
-    assert payload["warnings"][0]["code"] == "partial_distillation"
-    assert payload["warnings"][0]["detail"]["unresolved_sections"] == [
-        "关键规则",
-        "边界限制",
-        "禁止项",
-    ]
-    assert payload["meta"]["source_type"] == "document"
-    assert payload["meta"]["extracted_section_count"] == 1
-    assert payload["meta"]["distill_mode"] == "heuristic"
-    assert payload["meta"]["extraction_source"] == "heuristic"
-
-
-def test_distill_fails_when_extraction_is_insufficient(tmp_path: Path, capsys) -> None:
-    """distill 几乎提炼不到结构化信息时应返回 failure。"""
-
-    create_minimal_repo(tmp_path)
-    source_file = tmp_path / "brief.md"
-    source_file.write_text("# 简短文档\n\n只有一句描述。\n", encoding="utf-8")
-
-    exit_code = main(["-p", str(tmp_path), "--json", "distill", str(source_file)])
-    captured = capsys.readouterr()
-    payload = json.loads(captured.out)
-
-    assert exit_code == 1
-    assert payload["status"] == "failure"
-    assert payload["warnings"][0]["code"] == "partial_distillation"
-    assert payload["errors"][0]["code"] == "distillation_insufficient"
-    assert payload["meta"]["extracted_section_count"] == 0
-
-
-def test_distill_extracts_requirements_and_constraints(tmp_path: Path, capsys) -> None:
-    """distill 应从核心需求和技术约束中提炼规则与限制。"""
-
-    create_minimal_repo(tmp_path)
-    source_file = tmp_path / "requirements.md"
-    source_file.write_text(
-        "# 需求\n\n## 业务目标\n构建测试系统\n\n## 核心需求\n1. 用户管理\n2. 权限控制\n\n## 技术约束\n- 使用 Python 3.10+\n- 不得写入明文密钥\n",
-        encoding="utf-8",
-    )
-
-    exit_code = main(["-p", str(tmp_path), "--json", "distill", str(source_file)])
-    captured = capsys.readouterr()
-    payload = json.loads(captured.out)
-
-    assert exit_code == 0
-    target_path = Path(payload["meta"]["target_path"])
-    content = target_path.read_text(encoding="utf-8")
-    assert "- 用户管理" in content
-    assert "- 使用 Python 3.10+" in content
-    assert "- 不得写入明文密钥" in content
-
-
-def test_distill_host_model_mode_uses_structured_output(tmp_path: Path, capsys) -> None:
-    """distill 在 host-model 模式下应消费宿主模型结构化结果。"""
-
-    create_minimal_repo(tmp_path)
-    source_file = tmp_path / "requirements.md"
-    source_file.write_text("# 任意文档\n\n原始内容。\n", encoding="utf-8")
 
     with patch(
-        "harness_commander.application.commands.distill_with_host_model",
+        "harness_commander.application.commands.distill.distill_with_host_model",
         return_value={
-            "goals": ["提升新用户完成率"],
-            "rules": ["必须引导用户完成邮箱验证"],
-            "limits": ["仅支持邮箱注册"],
-            "prohibitions": ["不得跳过风控校验"],
+            "summary": "这是简短材料的首版摘要。",
+            "key_relationships": [],
+            "reference_units": ["保留最小参考单元。"],
+            "agent_guidance": [],
         },
     ):
         exit_code = main(
@@ -354,40 +306,35 @@ def test_distill_host_model_mode_uses_structured_output(tmp_path: Path, capsys) 
                 "--json",
                 "distill",
                 str(source_file),
-                "--mode",
-                "host-model",
+                "整理成下游模型可读的上下文包",
             ]
         )
     captured = capsys.readouterr()
     payload = json.loads(captured.out)
 
     assert exit_code == 0
-    assert payload["status"] == "success"
-    assert payload["meta"]["distill_mode"] == "host-model"
-    assert payload["meta"]["extraction_source"] == "host-model"
-    assert payload["meta"]["model_provider"] == "claude-cli"
-    target_path = Path(payload["meta"]["target_path"])
-    content = target_path.read_text(encoding="utf-8")
-    assert "- 提升新用户完成率" in content
-    assert "- 必须引导用户完成邮箱验证" in content
-    assert "- 不得跳过风控校验" in content
+    assert payload["status"] == "warning"
+    assert payload["warnings"][0]["code"] == "partial_distillation"
+    assert payload["warnings"][0]["detail"]["unresolved_sections"] == [
+        "Key Relationships",
+        "Agent Guidance",
+    ]
+    assert payload["meta"]["source_types"] == ["document"]
+    assert payload["meta"]["distilled_unit_count"] == 2
 
 
-def test_distill_auto_mode_falls_back_to_heuristic_when_host_model_fails(
+def test_distill_fails_when_host_model_returns_no_usable_units(
     tmp_path: Path, capsys
 ) -> None:
-    """auto 模式在宿主模型失败时应回退到 heuristic。"""
+    """distill 在宿主模型没有返回可用结构化结果时应失败。"""
 
     create_minimal_repo(tmp_path)
-    source_file = tmp_path / "requirements.md"
-    source_file.write_text(
-        "# 需求\n\n## 业务目标\n构建测试系统\n\n## 核心需求\n1. 用户管理\n",
-        encoding="utf-8",
-    )
+    source_file = tmp_path / "brief.md"
+    source_file.write_text("# 简短文档\n\n只有一句描述。\n", encoding="utf-8")
 
     with patch(
-        "harness_commander.application.commands.distill_with_host_model",
-        side_effect=HostModelError("boom"),
+        "harness_commander.application.commands.distill.distill_with_host_model",
+        side_effect=HostModelError("empty response"),
     ):
         exit_code = main(
             [
@@ -396,19 +343,360 @@ def test_distill_auto_mode_falls_back_to_heuristic_when_host_model_fails(
                 "--json",
                 "distill",
                 str(source_file),
-                "--mode",
-                "auto",
+                "整理成 llms 上下文包",
+            ]
+        )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 1
+    assert payload["status"] == "failure"
+    assert payload["errors"][0]["code"] == "host_model_unavailable"
+
+
+def test_distill_extracts_context_bundle_with_instruction(tmp_path: Path, capsys) -> None:
+    """distill 应生成包含摘要、关系和参考单元的 .llms 内容。"""
+
+    create_minimal_repo(tmp_path)
+    source_file = tmp_path / "requirements.md"
+    source_file.write_text(
+        "# 需求\n\n## 业务目标\n构建测试系统\n\n## 核心需求\n1. 用户管理\n2. 权限控制\n",
+        encoding="utf-8",
+    )
+
+    with patch(
+        "harness_commander.application.commands.distill.distill_with_host_model",
+        return_value={
+            "summary": "该材料描述了一个测试系统的核心能力。",
+            "key_relationships": ["用户管理与权限控制共同构成核心功能。"],
+            "reference_units": ["用户管理示例", "权限控制示例"],
+            "agent_guidance": ["生成时保持模块边界清晰。"],
+        },
+    ):
+        exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "--json",
+                "distill",
+                str(source_file),
+                "整理给下游 Agent 生成相似 API 参考",
             ]
         )
     captured = capsys.readouterr()
     payload = json.loads(captured.out)
 
     assert exit_code == 0
-    assert payload["meta"]["distill_mode"] == "auto"
-    assert payload["meta"]["extraction_source"] == "heuristic"
-    assert payload["meta"]["fallback_from"] == "host-model"
+    target_path = Path(payload["meta"]["output_path"])
+    content = target_path.read_text(encoding="utf-8")
+    assert "## Distilled Summary" in content
+    assert "## Key Relationships" in content
+    assert "## Reference Units" in content
+    assert "用户管理示例" in content
+    assert "生成时保持模块边界清晰。" in content
+
+
+def test_distill_supports_multiple_inputs_and_ranges(tmp_path: Path, capsys) -> None:
+    """distill 应支持多个输入和片段引用。"""
+
+    create_minimal_repo(tmp_path)
+    a_file = tmp_path / "api.py"
+    b_file = tmp_path / "service.py"
+    a_file.write_text("line1\nline2\nline3\nline4\n", encoding="utf-8")
+    b_file.write_text("svc1\nsvc2\nsvc3\nsvc4\n", encoding="utf-8")
+
+    with patch(
+        "harness_commander.application.commands.distill.distill_with_host_model",
+        return_value={
+            "summary": "这两个输入共同描述了接口与服务关系。",
+            "key_relationships": ["api.py 调用 service.py。"],
+            "reference_units": ["api 入口片段", "service 实现片段"],
+            "agent_guidance": ["生成同类 API 时复用该调用链。"],
+        },
+    ):
+        exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "--json",
+                "distill",
+                str(a_file) + ":2-3",
+                str(b_file),
+                "提取 API 调用链并整理为 llms",
+            ]
+        )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert payload["meta"]["inputs"][0].endswith("api.py:2-3")
+    assert payload["meta"]["inputs"][1].endswith("service.py")
+    assert payload["meta"]["source_types"] == ["code"]
+
+
+def test_distill_supports_interactive_flag(tmp_path: Path, capsys) -> None:
+    """interactive 模式应保留后续对话收敛提示。"""
+
+    create_minimal_repo(tmp_path)
+    source_file = tmp_path / "requirements.md"
+    source_file.write_text("# 需求\n\n原始内容。\n", encoding="utf-8")
+
+    with patch(
+        "harness_commander.application.commands.distill.distill_with_host_model",
+        return_value={
+            "summary": "首版摘要。",
+            "key_relationships": ["核心关系。"],
+            "reference_units": ["参考单元。"],
+            "agent_guidance": ["后续可继续细化输出结构。"],
+        },
+    ):
+        exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "--json",
+                "distill",
+                str(source_file),
+                "整理成可继续细化的 llms",
+                "--interactive",
+            ]
+        )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
     warning_codes = [warning["code"] for warning in payload["warnings"]]
-    assert "distill_fallback_to_heuristic" in warning_codes
+    assert "interactive_followup_available" in warning_codes
+    assert payload["meta"]["interactive"] is True
+
+
+def test_distill_supports_mixed_document_and_code_inputs(tmp_path: Path, capsys) -> None:
+    """distill 应识别文档与源码混合输入。"""
+
+    create_minimal_repo(tmp_path)
+    doc_file = tmp_path / "requirements.md"
+    code_file = tmp_path / "service.py"
+    doc_file.write_text("# 需求\n\n描述业务目标。\n", encoding="utf-8")
+    code_file.write_text("def run_service():\n    return 'ok'\n", encoding="utf-8")
+
+    with patch(
+        "harness_commander.application.commands.distill.distill_with_host_model",
+        return_value={
+            "summary": "文档与代码共同描述实现目标。",
+            "key_relationships": ["requirements.md 约束 service.py 的实现边界。"],
+            "reference_units": ["run_service 示例。"],
+            "agent_guidance": ["生成相似模块时同时参考文档目标与代码入口。"],
+        },
+    ):
+        exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "--json",
+                "distill",
+                str(doc_file),
+                str(code_file),
+                "整理为跨文档与代码的 llms 包",
+            ]
+        )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert payload["meta"]["source_types"] == ["code", "document"]
+    content = Path(payload["meta"]["output_path"]).read_text(encoding="utf-8")
+    assert "requirements.md" in content
+    assert "service.py" in content
+
+
+def test_distill_supports_explicit_output_directory(tmp_path: Path, capsys) -> None:
+    """输出目录参数应落为 index.llms。"""
+
+    create_minimal_repo(tmp_path)
+    source_file = tmp_path / "requirements.md"
+    source_file.write_text("# 需求\n\n输出目录测试。\n", encoding="utf-8")
+
+    with patch(
+        "harness_commander.application.commands.distill.distill_with_host_model",
+        return_value={
+            "summary": "目录输出测试摘要。",
+            "key_relationships": ["单文件输入生成目录型产物。"],
+            "reference_units": ["目录输出示例。"],
+            "agent_guidance": ["下游可读取 index.llms。"],
+        },
+    ):
+        exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "--json",
+                "distill",
+                str(source_file),
+                "整理到指定目录",
+                "--output",
+                "docs/references/distilled",
+            ]
+        )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert payload["meta"]["output_path"].endswith("docs/references/distilled/index.llms")
+    assert (tmp_path / "docs/references/distilled/index.llms").exists()
+
+
+def test_distill_dry_run_does_not_write_output(tmp_path: Path, capsys) -> None:
+    """dry-run 应返回目标路径但不实际写入。"""
+
+    create_minimal_repo(tmp_path)
+    source_file = tmp_path / "requirements.md"
+    source_file.write_text("# 需求\n\n只验证 dry-run。\n", encoding="utf-8")
+
+    with patch(
+        "harness_commander.application.commands.distill.distill_with_host_model",
+        return_value={
+            "summary": "dry-run 摘要。",
+            "key_relationships": ["不会实际落盘。"],
+            "reference_units": ["dry-run 示例。"],
+            "agent_guidance": ["可先预览路径。"],
+        },
+    ):
+        exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "--json",
+                "distill",
+                str(source_file),
+                "只预览 llms 结果",
+                "--dry-run",
+            ]
+        )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert payload["artifacts"][0]["action"] == "would_create"
+    assert not Path(payload["meta"]["output_path"]).exists()
+
+
+def test_distill_rejects_invalid_range(tmp_path: Path, capsys) -> None:
+    """非法片段范围应直接失败。"""
+
+    create_minimal_repo(tmp_path)
+    source_file = tmp_path / "api.py"
+    source_file.write_text("line1\nline2\n", encoding="utf-8")
+
+    exit_code = main(
+        [
+            "-p",
+            str(tmp_path),
+            "--json",
+            "distill",
+            str(source_file) + ":2-5",
+            "整理非法片段",
+        ]
+    )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 1
+    assert payload["errors"][0]["code"] == "invalid_input_range"
+
+
+def test_distill_reports_missing_source_file(tmp_path: Path, capsys) -> None:
+    """源文件不存在时应返回稳定错误。"""
+
+    create_minimal_repo(tmp_path)
+
+    exit_code = main(
+        [
+            "-p",
+            str(tmp_path),
+            "--json",
+            "distill",
+            "missing.md",
+            "整理缺失文件",
+        ]
+    )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 1
+    assert payload["errors"][0]["code"] == "source_not_found"
+
+
+def test_distill_reports_output_write_failure(tmp_path: Path, capsys) -> None:
+    """输出路径不可写时应返回稳定失败。"""
+
+    create_minimal_repo(tmp_path)
+    source_file = tmp_path / "requirements.md"
+    source_file.write_text("# 需求\n\n验证写入失败。\n", encoding="utf-8")
+
+    with patch(
+        "harness_commander.application.commands.distill.distill_with_host_model",
+        return_value={
+            "summary": "写入失败前的摘要。",
+            "key_relationships": ["结构化结果已生成。"],
+            "reference_units": ["写入失败示例。"],
+            "agent_guidance": ["需要稳定错误码。"],
+        },
+    ), patch(
+        "harness_commander.application.commands.distill.write_text",
+        side_effect=PermissionError("permission denied"),
+    ):
+        exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "--json",
+                "distill",
+                str(source_file),
+                "整理并写入",
+            ]
+        )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 1
+    assert payload["errors"][0]["code"] == "output_write_failed"
+
+
+def test_distill_uses_positional_instruction_and_default_llms_output(
+    tmp_path: Path, capsys
+) -> None:
+    """distill 应把最后一个位置参数视为说明，并默认输出到 .llms。"""
+
+    create_minimal_repo(tmp_path)
+    source_file = tmp_path / "requirements.md"
+    source_file.write_text("# 需求\n\n## 目标\n验证默认落点。\n", encoding="utf-8")
+
+    with patch(
+        "harness_commander.application.commands.distill.distill_with_host_model",
+        return_value={
+            "summary": "验证默认 .llms 落点。",
+            "key_relationships": ["位置参数中的最后一项被识别为说明。"],
+            "reference_units": ["默认落点示例。"],
+            "agent_guidance": ["下游优先读取 .llms 目录。"],
+        },
+    ):
+        exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "--json",
+                "distill",
+                str(source_file),
+                "整理成默认 llms 包",
+            ]
+        )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert payload["meta"]["instruction"] == "整理成默认 llms 包"
+    assert payload["meta"]["output_path"].endswith(".llms/requirements.llms")
+    assert (tmp_path / ".llms/requirements.llms").exists()
 
 
 def test_check_reports_blocking_issue_with_required_metadata(

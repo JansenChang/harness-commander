@@ -190,9 +190,9 @@ Harness-Commander 当前应固定为“分层命令编排架构（Layered Comman
 
 ### 当前已实现
 
-- `distill` 已在 application 层提供显式模式切换：`heuristic` / `host-model` / `auto`
+- `distill` 默认通过 application 层调用宿主模型生成 `.llms` 结构化上下文包
 - 宿主模型接入点固定放在 [src/harness_commander/application/model_tasks.py](src/harness_commander/application/model_tasks.py)
-- `run_distill()` 负责模式选择、fallback、结果归一化和统一 `CommandResult`
+- `run_distill()` 负责输入解析、宿主模型调用、结果归一化和统一 `CommandResult`
 
 ### 当前不接模型，但保留扩展位
 
@@ -217,7 +217,7 @@ Harness-Commander 当前应固定为“分层命令编排架构（Layered Comman
 | propose-plan | 参数解析、输出 | 编排计划生成 | 统一结果 | 文档检查、计划落盘 | 未来可选 |
 | plan-check | 参数解析、输出 | 编排计划校验 | 统一结果 | 计划加载与校验 | 仅未来摘要增强 |
 | sync | 参数解析、输出 | 编排变更识别与产物更新 | 统一结果 | 文件扫描与落盘 | 仅未来内容摘要增强 |
-| distill | 参数解析、输出 | 编排压缩流程与 fallback | 统一结果 | 读取源文件与写入参考材料 | 当前已实现可选 host-model |
+| distill | 参数解析、输出 | 编排多输入蒸馏流程 | 统一结果 | 读取文件/片段并写入 `.llms` 上下文包 | 默认调用宿主模型 |
 | check | 参数解析、输出 | 编排审计流程 | 统一结果 | 规则源加载与文件扫描 | 仅未来摘要增强 |
 | collect-evidence | 参数解析、输出 | 编排证据记录 | 统一结果 | 证据落盘 | 默认否，未来仅摘要增强 |
 
@@ -249,5 +249,6 @@ V1 阶段应继续坚持：
 ## 后续扩展建议
 
 - `distill` 已按该原则落地到独立的 [src/harness_commander/application/model_tasks.py](src/harness_commander/application/model_tasks.py)；后续若扩展 `propose-plan`，应复用同样的 application 边界，而不是直接塞进 CLI。
+- 如果 `distill` 后续增加更强的交互收敛能力，也应继续保持“CLI 只收集极简输入、application 负责编排、model_tasks 负责认知任务”的边界。
 - 如果 `sync` 和 `check` 规则继续增多，可把规则定义从 `application/commands.py` 拆到独立规则模块。
 - 如果命令参数继续复杂化，可为每个命令增加独立输入 DTO，避免 `commands.py` 继续膨胀。

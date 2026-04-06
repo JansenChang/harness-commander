@@ -24,7 +24,7 @@
 - `propose-plan`：`docs/product-specs/v1/commands/propose-plan/product.md`
 - `plan-check`：`docs/product-specs/v1/commands/plan-check/product.md`
 - `sync`：`docs/product-specs/v1/commands/sync/product.md`
-- `distill`：`docs/product-specs/v1/commands/distill/product.md`
+- `distill`：`docs/product-specs/v1/commands/distill/product.md`（生成供下游 LLM / Agent 使用的 `.llms` 结构化上下文包）
 - `check`：`docs/product-specs/v1/commands/check/product.md`
 - `collect-evidence`：`docs/product-specs/v1/commands/collect-evidence/product.md`
 - `Harness-Commander（已归档）`：`docs/product-specs/harness-commander.md`
