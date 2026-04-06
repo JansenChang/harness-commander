@@ -17,7 +17,7 @@
 - [关键规则 7]: 打包配置必须包含所有运行时依赖，确保工具在干净环境中正常运行
 - [关键规则 8]: Skill 定义必须遵循 Claude Code skill 目录规范，提供清晰的命令描述和参数提示
 - [关键规则 9]: 必须提供最小 install/uninstall 脚本，支持在本仓库内安装或移除项目级 skill
-- [关键规则 10]: `distill` 默认必须被明确标注为规则/启发式提炼能力；只有显式传入 `--mode host-model` 或 `--mode auto` 时，才允许通过本地 `claude` CLI 调用宿主模型
+- [关键规则 10]: `distill` 默认调用宿主模型，命令主路径应围绕文件、片段和说明展开；Skill 集成必须保持这一语义，不应继续暴露旧的 `--mode` 参数模型
 - [关键规则 11]: Skill 集成必须支持 dry-run 模式，允许用户在应用变更前预览效果
 - [关键规则 12]: 必须提供安装后的 smoke 验证机制，确保工具正确集成到 Claude Code 环境
 
@@ -29,13 +29,13 @@
 - AC 5: 必须提供安装脚本 `install-skill.sh`，在已安装 `harness` 的前提下完成项目级 skill 安装
 - AC 6: 必须提供卸载脚本 `uninstall-skill.sh`，能够移除项目级 skill
 - AC 7: 安装 skill 后，在 Claude Code 中输入 `/harness init -p /tmp/test-project` 必须可以进入执行流程
-- AC 8: 安装 skill 后，在 Claude Code 中输入 `/harness distill -p /tmp/test-project /tmp/test-project/requirements.md --json` 必须可以进入执行流程
+- AC 8: 安装 skill 后，在 Claude Code 中输入 `/harness distill -p /tmp/test-project /tmp/test-project/requirements.md "整理成 llms 上下文包" --json` 必须可以进入执行流程
 - AC 9: 必须创建自动化验收测试目录 `tests/acceptance/`，并至少覆盖 4 个最小场景
 - AC 10: 验收测试必须覆盖：`harness --help`、skill 文件存在、`init` smoke、`distill` smoke
 - AC 11: 每个验收测试必须包含明确断言，验证命令执行结果符合预期
 - AC 12: 验收测试执行命令 `pytest tests/acceptance/` 必须全部通过
 - AC 13: 验收测试必须包含测试数据清理机制，确保测试不会污染系统环境
-- AC 14: 文档必须明确说明 `distill` 当前是 heuristic 模式，不应表述为已接入大模型总结
+- AC 14: 文档必须明确说明 `distill` 默认调用宿主模型，并以 `.llms` 结构化上下文包为目标产物；不应继续沿用旧的 heuristic / `--mode` 语义
 - AC 15: Skill 集成必须支持相对路径和绝对路径的解析，与 CLI 行为保持一致
 - AC 16: 打包配置必须包含最小化的运行时依赖，避免引入不必要的包依赖
 

@@ -38,8 +38,8 @@ harness plan-check -p /path/to/project docs/exec-plans/active/2026-04-06-user-au
 # 同步重大变更到文档
 harness sync -p /path/to/project
 
-# 压缩长文档为 AI 参考材料
-harness distill -p /path/to/project docs/long-specification.md
+# 从文件、片段和说明生成 .llms 上下文包
+harness distill -p /path/to/project docs/long-specification.md "提炼成给下游 Agent 使用的 llms 上下文包"
 
 # 执行项目审计
 harness check -p /path/to/project
@@ -76,7 +76,7 @@ pip install -e .
 
 ```
 /harness init -p /path/to/project
-/harness distill -p /path/to/project docs/long-specification.md --json
+/harness distill -p /path/to/project docs/long-specification.md "整理成 llms 上下文包" --json
 ```
 
 ### Skill 参数映射
@@ -89,9 +89,10 @@ pip install -e .
 
 ### 当前模型边界
 
-- `distill` 当前默认使用规则/启发式提炼生成参考材料。
-- `distill --mode host-model` 会通过本地 `claude` CLI 调用宿主模型做结构化提炼。
-- `distill --mode auto` 会优先尝试宿主模型，失败后自动回退到启发式路径。
+- `distill` 默认调用宿主模型，从文件、片段和说明生成 `.llms` 结构化上下文包。
+- `distill` 使用位置参数协议：`harness distill <file-or-range>... <instruction>`，最后一个位置参数就是蒸馏说明。
+- `distill` 不要求用户显式传 `model` 参数，也不再以 `--mode` 方式暴露内部蒸馏路径。
+- `distill` 的复杂输出偏好应通过后续对话继续收敛，而不是在首轮 CLI 中堆叠过多参数。
 - `propose-plan`、`sync`、`plan-check`、`check`、`collect-evidence` 当前仍由 Harness 主导执行；其中只有 `propose-plan` 保留未来接宿主模型生成内容的扩展位，`sync` / `plan-check` / `check` / `collect-evidence` 仅允许未来增加摘要或建议文案增强，不能接管状态、产物路径和事实字段。
 
 ### 参数顺序提示
@@ -100,8 +101,103 @@ pip install -e .
 
 ```bash
 harness --json -p /tmp/harness-demo init
-harness --json -p /tmp/harness-demo distill docs/requirements.md --mode auto
+harness --json -p /tmp/harness-demo distill docs/requirements.md "整理成 llms 上下文包"
 ```
+
+### distill 协议补充
+
+#### 位置参数协议
+
+- 命令格式：`harness distill <file-or-range>... <instruction>`
+- 最后一个位置参数始终是蒸馏说明 `instruction`
+- 至少需要 1 个输入和 1 段说明
+- `<file-or-range>` 支持整文件或 `path:start-end` 片段引用
+- 当前只支持文件输入，不支持目录输入
+
+示例：
+
+```bash
+harness distill requirements.md "整理成 llms 包"
+harness distill api.py:20-80 service.py README.md "提取调用链与关键约束"
+```
+
+#### 输出路径语义
+
+- 未指定 `--output` 时：
+  - 单输入默认写到 `<root>/.llms/<source-stem>.llms`
+  - 多输入默认写到 `<root>/.llms/index.llms`
+- 指定 `--output` 为文件路径时，直接写到该文件
+- 指定 `--output` 为目录路径时，实际写到该目录下的 `index.llms`
+- 相对路径按 `--root` 解析，绝对路径则直接使用
+
+#### distill 的 JSON meta
+
+`harness distill --json` 的 `meta` 当前包含：
+
+- `root`: 执行根目录
+- `inputs`: 实际参与蒸馏的输入引用列表
+- `instruction`: 最终解析出的蒸馏说明
+- `output_path`: 目标 `.llms` 路径
+- `dry_run`: 是否仅预览
+- `interactive`: 是否允许后续对话继续收敛
+- `source_types`: 输入类型集合，可能为 `document` / `code` / `mixed`
+- `distilled_unit_count`: 当前提炼出的结构化单元数
+- `unresolved_inputs`: 预留字段，当前通常为空列表
+- `unresolved_sections`: 尚未充分提炼的 section 列表
+
+示例：
+
+```json
+{
+  "command": "distill",
+  "status": "warning",
+  "summary": "已基于 1 个输入生成 `.llms` 结构化上下文包 requirements.llms。",
+  "artifacts": [
+    {
+      "path": "/tmp/demo/.llms/requirements.llms",
+      "kind": "file",
+      "action": "would_create",
+      "note": "dry-run 未实际写入文件"
+    }
+  ],
+  "warnings": [
+    {
+      "code": "partial_distillation",
+      "message": "部分结构化上下文字段未被充分提炼，请人工复核。",
+      "location": "distill",
+      "detail": {
+        "unresolved_sections": ["Key Relationships"]
+      }
+    }
+  ],
+  "errors": [],
+  "meta": {
+    "root": "/tmp/demo",
+    "inputs": ["requirements.md"],
+    "instruction": "整理成 llms 包",
+    "output_path": "/tmp/demo/.llms/requirements.llms",
+    "dry_run": true,
+    "interactive": false,
+    "source_types": ["document"],
+    "distilled_unit_count": 3,
+    "unresolved_inputs": [],
+    "unresolved_sections": ["Key Relationships"]
+  }
+}
+```
+
+#### dry-run / interactive / 状态语义
+
+- `--dry-run` 仍会解析输入、执行蒸馏流程并返回目标路径，但不会实际写出 `.llms` 文件
+- `--interactive` 表示允许后续通过对话继续收敛首版结果，不是进入终端交互模式
+- `partial_distillation`、`interactive_followup_available` 会把结果置为 `warning`
+- `source_not_found`、`invalid_input_range`、`host_model_unavailable`、`output_write_failed` 会使命令失败
+
+当前 `.llms` 产物至少围绕以下 section 组织：
+- `Distilled Summary`
+- `Key Relationships`
+- `Reference Units`
+- `Agent Guidance`
 
 ## 📁 项目结构
 
@@ -109,7 +205,9 @@ harness --json -p /tmp/harness-demo distill docs/requirements.md --mode auto
 harness-commander/
 ├── src/harness_commander/
 │   ├── cli.py              # CLI 入口
-│   ├── application/        # 应用层（命令实现）
+│   ├── application/
+│   │   ├── commands/       # 按命令拆分的应用层编排
+│   │   └── model_tasks.py  # 宿主模型调用边界
 │   ├── domain/             # 领域层（模型定义）
 │   └── infrastructure/     # 基础设施层（文件操作、模板等）
 ├── docs/                   # 治理文档
@@ -148,21 +246,23 @@ source .venv/bin/activate  # Linux/Mac
 pip install -e ".[dev]"
 
 # 3. 运行代码质量检查
-make lint    # 或: ruff check . && black --check . && isort --check .
-make type    # 或: mypy src/
+make lint    # 或: .venv/bin/ruff check . && .venv/bin/black --check . && .venv/bin/isort --check .
+make type    # 或: .venv/bin/mypy src/
 ```
+
+默认约定：本项目的测试、验收和 CLI smoke 命令都优先通过 `.venv/bin/...` 执行，不依赖系统 PATH 中是否已安装 `python`、`pytest` 或 `harness`。
 
 ### 运行测试
 
 ```bash
 # 运行所有测试
-pytest
+.venv/bin/pytest
 
 # 运行特定测试
-pytest tests/test_cli.py
+.venv/bin/pytest tests/test_cli.py
 
 # 运行验收测试
-pytest tests/acceptance/
+.venv/bin/pytest tests/acceptance/
 ```
 
 ### 构建打包
@@ -218,7 +318,7 @@ Harness-Commander 支持完整的治理生命周期：
 2. **规划** (`propose-plan`) - 将需求转化为可执行计划
 3. **校验** (`plan-check`) - 确保计划引用正确约束文档
 4. **同步** (`sync`) - 将代码重大变更同步到文档
-5. **脱水** (`distill`) - 默认通过规则提炼压缩长文档，也支持可选的宿主模型增强模式
+5. **脱水** (`distill`) - 默认调用宿主模型，从文件、片段和说明生成供下游 LLM / Agent 使用的 `.llms` 上下文包
 6. **审计** (`check`) - 对照质量、安全和信仰执行审计
 7. **取证** (`collect-evidence`) - 留存任务执行证据
 

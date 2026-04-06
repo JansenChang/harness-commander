@@ -112,15 +112,24 @@ def build_parser() -> argparse.ArgumentParser:
 
     distill_parser = subparsers.add_parser(
         "distill",
-        help="通过规则提炼或宿主模型增强将长文档压缩为参考材料",
+        help="从文件、片段和说明生成供下游模型使用的 .llms 上下文包",
     )
     add_path_argument(distill_parser, default=argparse.SUPPRESS)
-    distill_parser.add_argument("source", help="源文档路径")
     distill_parser.add_argument(
-        "--mode",
-        choices=("heuristic", "host-model", "auto"),
-        default="heuristic",
-        help="提炼模式：heuristic（默认）、host-model、auto",
+        "inputs",
+        nargs="+",
+        help="输入文件或片段引用，最后一个参数为蒸馏说明，例如 a.py a.py:10-80 '整理为 llms 上下文包'",
+    )
+    distill_parser.add_argument(
+        "-o",
+        "--output",
+        help="输出 .llms 文件或目录路径，默认写入 docs/references/",
+    )
+    distill_parser.add_argument(
+        "-i",
+        "--interactive",
+        action="store_true",
+        help="允许后续通过多轮对话继续收敛输出结构",
     )
     distill_parser.add_argument(
         "--dry-run", action="store_true", help="仅展示变更，不实际写入"
@@ -200,9 +209,10 @@ def main(argv: list[str] | None = None) -> int:
             "distill",
             run_distill,
             root=root,
-            source_path=args.source,
+            raw_inputs=args.inputs,
+            output_path=args.output,
+            interactive=args.interactive,
             dry_run=args.dry_run,
-            mode=args.mode,
         )
     elif args.command == "check":
         result = execute_command(

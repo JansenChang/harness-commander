@@ -17,7 +17,6 @@ if str(SRC_PATH) not in sys.path:
 import json  # noqa: E402
 from unittest.mock import patch  # noqa: E402
 
-from harness_commander.application.model_tasks import HostModelError  # noqa: E402
 from harness_commander.cli import main  # noqa: E402
 
 
@@ -46,10 +45,28 @@ def test_full_workflow_with_dry_run(tmp_path: Path, capsys) -> None:
         encoding="utf-8",
     )
 
-    exit_code = main(["-p", str(tmp_path), "distill", str(test_doc), "--dry-run"])
+    with patch(
+        "harness_commander.application.commands.distill.distill_with_host_model",
+        return_value={
+            "summary": "测试文档的首版摘要。",
+            "key_relationships": ["文档中的目标与规则共同构成上下文。"],
+            "reference_units": ["测试规则提取", "测试信息压缩"],
+            "agent_guidance": ["下游模型应优先复用这些约束。"],
+        },
+    ):
+        exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "distill",
+                str(test_doc),
+                "整理测试文档为 llms 上下文包",
+                "--dry-run",
+            ]
+        )
     captured = capsys.readouterr()
     assert exit_code == 0
-    assert "[warning] distill" in captured.out
+    assert "[success] distill" in captured.out
     assert "would_create" in captured.out
 
     exit_code = main(["-p", str(tmp_path), "check", "--dry-run"])
@@ -81,7 +98,12 @@ def test_json_output_consistency(tmp_path: Path, capsys) -> None:
 
     commands_to_test = [
         ["--json", "sync", "--dry-run"],
-        ["--json", "distill", str(tmp_path / "docs/SECURITY.md")],
+        [
+            "--json",
+            "distill",
+            str(tmp_path / "docs/SECURITY.md"),
+            "整理安全文档为 llms 上下文包",
+        ],
     ]
 
     for command_args in commands_to_test:
@@ -128,7 +150,25 @@ def test_command_chaining(tmp_path: Path, capsys) -> None:
     migration_file.parent.mkdir(parents=True, exist_ok=True)
     migration_file.write_text("create table reports(id integer primary key);\n", encoding="utf-8")
 
-    exit_code = main(["-p", str(tmp_path), "--json", "distill", str(test_doc)])
+    with patch(
+        "harness_commander.application.commands.distill.distill_with_host_model",
+        return_value={
+            "summary": "该需求文档描述测试系统的基础需求。",
+            "key_relationships": ["用户管理、权限控制与数据导出构成主要能力。"],
+            "reference_units": ["用户管理", "权限控制", "数据导出"],
+            "agent_guidance": ["生成实现时保持 JSON 输出约束。"],
+        },
+    ):
+        exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "--json",
+                "distill",
+                str(test_doc),
+                "整理需求文档为 llms 上下文包",
+            ]
+        )
     captured = capsys.readouterr()
     assert exit_code == 0
     distill_result = json.loads(captured.out.strip())
@@ -154,7 +194,7 @@ def test_command_chaining(tmp_path: Path, capsys) -> None:
 
 
 def test_host_model_distill_json_contract(tmp_path: Path, capsys) -> None:
-    """host-model 模式应保留统一 JSON 协议与 fallback 字段。"""
+    """distill 应保留新的统一 JSON 协议。"""
 
     exit_code = main(["-p", str(tmp_path), "init"])
     captured = capsys.readouterr()
@@ -167,8 +207,13 @@ def test_host_model_distill_json_contract(tmp_path: Path, capsys) -> None:
     )
 
     with patch(
-        "harness_commander.application.commands.distill_with_host_model",
-        side_effect=HostModelError("mock unavailable"),
+        "harness_commander.application.commands.distill.distill_with_host_model",
+        return_value={
+            "summary": "测试系统需求的结构化摘要。",
+            "key_relationships": ["业务目标驱动后续实现。"],
+            "reference_units": ["测试系统需求片段"],
+            "agent_guidance": ["优先遵守输入中的显式目标。"],
+        },
     ):
         exit_code = main(
             [
@@ -177,8 +222,7 @@ def test_host_model_distill_json_contract(tmp_path: Path, capsys) -> None:
                 "--json",
                 "distill",
                 str(test_doc),
-                "--mode",
-                "auto",
+                "整理需求为 llms 上下文包",
             ]
         )
     captured = capsys.readouterr()
@@ -186,13 +230,9 @@ def test_host_model_distill_json_contract(tmp_path: Path, capsys) -> None:
 
     assert exit_code == 0
     assert payload["command"] == "distill"
-    assert payload["meta"]["distill_mode"] == "auto"
-    assert payload["meta"]["fallback_from"] == "host-model"
-    assert payload["meta"]["extraction_source"] == "heuristic"
-    assert any(
-        warning["code"] == "distill_fallback_to_heuristic"
-        for warning in payload["warnings"]
-    )
+    assert payload["meta"]["inputs"] == ["requirements.md"]
+    assert payload["meta"]["instruction"] == "整理需求为 llms 上下文包"
+    assert payload["meta"]["source_types"] == ["document"]
 
 
 
@@ -236,7 +276,15 @@ def test_error_handling_and_recovery(tmp_path: Path, capsys) -> None:
     assert exit_code != 0
     assert "error" in captured.out.lower()
 
-    exit_code = main(["-p", str(tmp_path), "distill", "non-existent-file.md"])
+    exit_code = main(
+        [
+            "-p",
+            str(tmp_path),
+            "distill",
+            "non-existent-file.md",
+            "整理缺失文件",
+        ]
+    )
     captured = capsys.readouterr()
     assert exit_code != 0
     assert "error" in captured.out.lower()
