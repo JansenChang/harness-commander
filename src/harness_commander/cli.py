@@ -84,6 +84,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     evidence_parser.add_argument("--summary", required=True, help="结果摘要")
     evidence_parser.add_argument("--status", default="success", help="被记录命令的状态")
+    evidence_parser.add_argument("--started-at", help="执行开始时间，ISO 8601 格式")
+    evidence_parser.add_argument("--finished-at", help="执行结束时间，ISO 8601 格式")
+    evidence_parser.add_argument(
+        "--artifact",
+        action="append",
+        default=[],
+        dest="artifacts",
+        help="与该次执行相关的产物路径，可重复传入多次",
+    )
     evidence_parser.add_argument(
         "--log",
         action="append",
@@ -101,9 +110,18 @@ def build_parser() -> argparse.ArgumentParser:
         "--dry-run", action="store_true", help="仅展示变更，不实际写入"
     )
 
-    distill_parser = subparsers.add_parser("distill", help="调用大模型能力将长文档压缩为参考材料")
+    distill_parser = subparsers.add_parser(
+        "distill",
+        help="通过规则提炼或宿主模型增强将长文档压缩为参考材料",
+    )
     add_path_argument(distill_parser, default=argparse.SUPPRESS)
     distill_parser.add_argument("source", help="源文档路径")
+    distill_parser.add_argument(
+        "--mode",
+        choices=("heuristic", "host-model", "auto"),
+        default="heuristic",
+        help="提炼模式：heuristic（默认）、host-model、auto",
+    )
     distill_parser.add_argument(
         "--dry-run", action="store_true", help="仅展示变更，不实际写入"
     )
@@ -184,6 +202,7 @@ def main(argv: list[str] | None = None) -> int:
             root=root,
             source_path=args.source,
             dry_run=args.dry_run,
+            mode=args.mode,
         )
     elif args.command == "check":
         result = execute_command(
@@ -202,6 +221,9 @@ def main(argv: list[str] | None = None) -> int:
             summary=args.summary,
             status=args.status,
             log_lines=args.logs,
+            started_at=args.started_at,
+            finished_at=args.finished_at,
+            artifact_paths=args.artifacts,
             dry_run=args.dry_run,
         )
     render_result(result, as_json=args.json_output)

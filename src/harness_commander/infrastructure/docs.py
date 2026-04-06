@@ -33,17 +33,48 @@ RELATED_REFERENCE_FILES = [
     "docs/RELIABILITY.md",
     "docs/SECURITY.md",
     "docs/design-docs/core-beliefs.md",
-    "docs/product-specs/harness-commander.md",
+    "docs/product-specs/index.md",
+    "docs/product-specs/v1/index.md",
+]
+
+RECOMMENDED_PLAN_REFERENCES = [
+    "docs/PRODUCT_SENSE.md",
+    "docs/QUALITY_SCORE.md",
+    "docs/RELIABILITY.md",
+    "docs/SECURITY.md",
+    "docs/design-docs/core-beliefs.md",
+    "docs/product-specs/v1/index.md",
 ]
 
 REQUIRED_PLAN_SECTIONS = {
     "## Goal": "计划缺少 Goal 段落",
+    "## Context": "计划缺少 Context 段落",
     "## Business Logic": "计划缺少 Business Logic 段落",
+    "## Scope": "计划缺少 Scope 段落",
     "## Acceptance Criteria": "计划缺少 Acceptance Criteria 段落",
     "## Exception Handling": "计划缺少 Exception Handling 段落",
-    "## Steps": "计划缺少 Steps 段落",
     "## Verification": "计划缺少 Verification 段落",
 }
+
+ULW_REQUIRED_LABELS = (
+    "### 目标",
+    "### 涉及范围",
+    "### 验收标准",
+)
+
+
+@dataclass(slots=True)
+class PlanContext:
+    """生成计划时的中间上下文。"""
+
+    request: str
+    normalized_request: str
+    goals: list[str]
+    scope_items: list[str]
+    constraint_items: list[str]
+    risk_items: list[str]
+    references: list[str]
+    ulws: list[dict[str, object]]
 
 
 @dataclass(slots=True)
@@ -91,73 +122,148 @@ def build_plan_path(root: Path, request: str) -> Path:
 
 
 def render_plan_markdown(request: str) -> str:
-    """渲染符合产品规格的最小计划模板。"""
+    """渲染符合 V1 产品规格的计划模板。"""
 
-    return f"""# {request} 执行计划
+    context = build_plan_context(request)
+    references = "\n".join(f"- `{reference}`" for reference in context.references)
+    scope_items = "\n".join(f"- {item}" for item in context.scope_items)
+    ulw_sections = "\n\n".join(_render_ulw_section(ulw) for ulw in context.ulws)
+    verification_steps = "\n".join(
+        [
+            "- 运行目标命令，检查文本摘要和 `--json` 输出字段是否一致。",
+            "- 校验计划文件已落盘到 `docs/exec-plans/active/`，且引用了必需治理文档。",
+            "- 针对至少一个失败场景验证不会伪造通过结果。",
+        ]
+    )
+
+    return f"""# {context.normalized_request} 执行计划
 
 ## Goal
 
-- 围绕“{request}”完成一轮可验证交付。
-- 确保实现过程遵循仓库治理文档，不绕过架构边界与质量规则。
+- 把“{context.normalized_request}”整理为可执行、可验证、可继续协作的实现计划。
+- 在进入编码前补齐治理文档引用、约束边界和最小验证闭环。
+
+## Context
+
+- 当前输入需求：{context.normalized_request}
+- 本计划由 `harness propose-plan` 生成，用于承接模糊需求并避免直接开写。
+- 计划生成和后续实现需优先遵循 `ARCHITECTURE.md`、`docs/PLANS.md` 与相关规范文档。
 
 ## Business Logic
 
-- 该计划服务于 Harness-Commander 统一命令治理目标。
-- 实现过程中必须优先引用 `ARCHITECTURE.md`、`docs/PLANS.md` 和至少一份相关规范文档。
-
-## Acceptance Criteria
-
-- AC 1: 产出可执行实现，且核心命令输出统一结果结构。
-- AC 2: 相关变更具备可验证方式，至少包含命令验证或测试验证。
-- AC 3: 产物写入遵循非静默覆盖原则，支持 dry-run 预演。
-
-## Exception Handling
-
-- 当核心治理文档缺失时，必须直接失败并提示缺失路径。
-- 当目标文件已存在且会产生覆盖时，必须停止并提示人工处理。
-- 当验证失败时，必须保留失败摘要，不能伪造通过结果。
+- 该计划服务于 Harness-Commander 的统一命令治理目标，要求先计划、后实现、再验证。
+- Harness 负责统一计划结构、引用规则、产物路径和结果协议。
+- 宿主模型可辅助需求整理与 ULW 拆分，但不能改变结果结构、落盘目录和通过/失败语义。
+- 当前需求的核心目标包括：
+{_indent_bullets(context.goals)}
+- 当前需求的关键约束包括：
+{_indent_bullets(context.constraint_items)}
+- 当前需求的主要风险包括：
+{_indent_bullets(context.risk_items)}
 
 ## Scope
 
-- 涉及目标：{request}
-- 涉及目录：`src/`、`tests/`、`docs/exec-plans/active/`
+{scope_items}
 
-## ULW 1
+## Non-Goals
 
-- 目标：建立与“{request}”相关的最小实现骨架。
-- 涉及范围：核心代码结构、输入输出协议、必要基础设施。
-- 验收标准：命令或模块能够被调用，且返回结构稳定。
+- 不跳过治理文档引用校验后直接开写实现。
+- 不一次性把需求扩展为超出当前输入意图的大范围重构。
+- 不在没有验证路径的情况下宣称任务完成。
 
-## ULW 2
+{ulw_sections}
 
-- 目标：补齐与“{request}”对应的验证闭环。
-- 涉及范围：测试、失败处理、证据输出。
-- 验收标准：至少存在一条成功验证路径与一条失败校验路径。
+## Acceptance Criteria
 
-## Steps
+- AC 1: 计划文件必须包含 Goal、Context、Business Logic、Scope、Acceptance Criteria、Exception Handling、Verification 等关键章节。
+- AC 2: 计划文件必须引用 `ARCHITECTURE.md`、`docs/PLANS.md` 和至少一份相关规范文档。
+- AC 3: 每个 ULW 必须包含“目标 / 涉及范围 / 验收标准”，便于宿主工具按块推进。
+- AC 4: 计划产物固定落在 `docs/exec-plans/active/`，并遵循统一结果协议。
 
-1. 阅读并确认相关治理文档与产品规格。
-2. 完成核心代码实现与必要的文件写入保护。
-3. 补充测试或验证命令，确认结果可复现。
+## Exception Handling
+
+- 当 `ARCHITECTURE.md`、`docs/PLANS.md` 或相关规范文档缺失时，必须停止继续执行并提示缺失路径。
+- 当目标计划文件名发生冲突时，必须生成新的不冲突路径，而不是覆盖已有文件。
+- 当需求信息不足以可靠拆分任务时，至少保留目标、约束和风险提示，避免伪造确定性计划。
+- 当后续实现或验证失败时，必须保留失败摘要，不能伪造通过结果。
 
 ## Verification
 
-- 运行与实现相关的测试命令。
-- 运行目标命令并检查文本输出与 JSON 输出。
+{verification_steps}
 
 ## References
 
 - `ARCHITECTURE.md`
 - `docs/PLANS.md`
-- `docs/PRODUCT_SENSE.md`
-- `docs/RELIABILITY.md`
-- `docs/SECURITY.md`
-- `docs/product-specs/harness-commander.md`
+{references}
 """
 
 
+def build_plan_context(request: str) -> PlanContext:
+    """把自然语言需求整理为稳定的计划生成上下文。"""
+
+    normalized_request = request.strip() or "未命名需求"
+    goals = [
+        f"明确“{normalized_request}”要解决的用户问题与交付目标。",
+        "把模糊需求收敛为可以继续实现和验证的执行计划。",
+    ]
+    scope_items = [
+        f"需求主题：{normalized_request}",
+        "涉及治理文档引用补齐与执行边界确认。",
+        "涉及后续实现拆分、验证闭环和结果协议对齐。",
+    ]
+    constraint_items = [
+        "计划必须引用 `ARCHITECTURE.md` 与 `docs/PLANS.md`。",
+        "计划必须至少引用一份相关规范文档。",
+        "每个 ULW 都必须包含目标、涉及范围、验收标准。",
+        "计划文件必须落盘到 `docs/exec-plans/active/`。",
+    ]
+    risk_items = [
+        "如果需求边界不清晰，后续实现容易范围失控。",
+        "如果缺少治理文档引用，计划可能偏离架构与质量约束。",
+        "如果没有验证闭环，宿主工具无法稳定消费执行结果。",
+    ]
+    references = [*RECOMMENDED_PLAN_REFERENCES]
+    ulws = [
+        {
+            "title": "ULW 1: 澄清需求并锁定边界",
+            "goal": f"把“{normalized_request}”整理为清晰目标、范围、约束和风险。",
+            "scope": [
+                "梳理当前需求的交付目标。",
+                "识别涉及的治理文档和关键边界。",
+                "明确本轮不做的内容，避免范围膨胀。",
+            ],
+            "acceptance": [
+                "需求被整理为明确的目标、约束和风险说明。",
+                "计划可作为后续实现的低上下文输入。",
+            ],
+        },
+        {
+            "title": "ULW 2: 补齐治理文档引用并生成执行块",
+            "goal": "把治理文档引用、ULW 结构和产物路径固化到计划中。",
+            "scope": [
+                "补齐必需治理文档与相关规范文档引用。",
+                "生成细粒度 ULW，覆盖实现与验证闭环。",
+                "确保落盘位置和结果协议符合产品要求。",
+            ],
+            "acceptance": [
+                "计划包含 `ARCHITECTURE.md`、`docs/PLANS.md` 和相关规范文档引用。",
+                "计划内每个 ULW 都包含目标、涉及范围、验收标准。",
+            ],
+        },
+    ]
+    return PlanContext(
+        request=request,
+        normalized_request=normalized_request,
+        goals=goals,
+        scope_items=scope_items,
+        constraint_items=constraint_items,
+        risk_items=risk_items,
+        references=references,
+        ulws=ulws,
+    )
 def validate_plan_document(root: Path, plan_path: Path) -> PlanValidationResult:
-    """校验计划文档是否满足最小合规要求。"""
+    """校验计划文档是否满足 V1 合规要求。"""
 
     if not plan_path.exists():
         raise HarnessCommanderError(
@@ -165,8 +271,10 @@ def validate_plan_document(root: Path, plan_path: Path) -> PlanValidationResult:
             "计划文件不存在，无法执行校验",
             location=str(plan_path),
         )
+
     content = plan_path.read_text(encoding="utf-8")
     issues: list[CommandMessage] = []
+
     for heading, message in REQUIRED_PLAN_SECTIONS.items():
         if heading not in content:
             issues.append(
@@ -177,6 +285,7 @@ def validate_plan_document(root: Path, plan_path: Path) -> PlanValidationResult:
                     detail={"section": heading},
                 )
             )
+
     for required_reference in REQUIRED_GOVERNANCE_FILES:
         if required_reference not in content:
             issues.append(
@@ -187,6 +296,7 @@ def validate_plan_document(root: Path, plan_path: Path) -> PlanValidationResult:
                     detail={"reference": required_reference},
                 )
             )
+
     if not any(reference in content for reference in RELATED_REFERENCE_FILES):
         issues.append(
             CommandMessage(
@@ -195,23 +305,71 @@ def validate_plan_document(root: Path, plan_path: Path) -> PlanValidationResult:
                 location=str(plan_path),
             )
         )
-    if "ULW" not in content or "验收标准：" not in content:
+
+    ulw_count = content.count("## ULW ")
+    if ulw_count == 0:
         issues.append(
             CommandMessage(
                 code="missing_ulw",
-                message="计划缺少 ULW 任务块或 ULW 验收标准",
+                message="计划缺少 ULW 任务块。",
                 location=str(plan_path),
             )
         )
-    if not (root / "ARCHITECTURE.md").exists():
-        issues.append(
-            CommandMessage(
-                code="missing_architecture_file",
-                message="仓库中缺少 ARCHITECTURE.md，无法完成计划合规校验",
-                location=str(root),
+    else:
+        for label in ULW_REQUIRED_LABELS:
+            if label not in content:
+                issues.append(
+                    CommandMessage(
+                        code="incomplete_ulw",
+                        message="计划中的 ULW 缺少必需字段。",
+                        location=str(plan_path),
+                        detail={"required_label": label},
+                    )
+                )
+
+    for required_path in [*REQUIRED_GOVERNANCE_FILES, *RELATED_REFERENCE_FILES]:
+        absolute_path = root / required_path
+        if not absolute_path.exists():
+            issues.append(
+                CommandMessage(
+                    code="missing_governance_file",
+                    message="仓库中缺少计划所依赖的治理文档。",
+                    location=str(absolute_path),
+                    detail={"reference": required_path},
+                )
             )
-        )
+
     return PlanValidationResult(issues=issues)
+
+
+
+def _render_ulw_section(ulw: dict[str, object]) -> str:
+    """渲染单个 ULW 区块。"""
+
+    title = str(ulw["title"])
+    goal = str(ulw["goal"])
+    scope = _indent_bullets(ulw["scope"])
+    acceptance = _indent_bullets(ulw["acceptance"])
+    return f"""## {title}
+
+### 目标
+
+- {goal}
+
+### 涉及范围
+
+{scope}
+
+### 验收标准
+
+{acceptance}"""
+
+
+
+def _indent_bullets(items: list[object]) -> str:
+    """把列表项格式化为 markdown bullet。"""
+
+    return "\n".join(f"  - {item}" for item in items)
 
 
 def load_init_templates(root: Path) -> TemplateLoadResult:

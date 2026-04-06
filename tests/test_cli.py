@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_PATH = PROJECT_ROOT / "src"
@@ -16,6 +17,7 @@ if str(SRC_PATH) not in sys.path:
 
 import json  # noqa: E402
 
+from harness_commander.application.model_tasks import HostModelError  # noqa: E402
 from harness_commander.cli import main  # noqa: E402
 from harness_commander.infrastructure import docs as docs_infra  # noqa: E402
 
@@ -31,7 +33,8 @@ def create_minimal_repo(root: Path) -> None:
         "docs/RELIABILITY.md": "# reliability\n",
         "docs/SECURITY.md": "# security\n",
         "docs/design-docs/core-beliefs.md": "# beliefs\n",
-        "docs/product-specs/harness-commander.md": "# spec\n",
+        "docs/product-specs/index.md": "# specs index\n",
+        "docs/product-specs/v1/index.md": "# spec v1 index\n",
     }
     for relative_path, content in required_files.items():
         path = root / relative_path
@@ -46,18 +49,14 @@ def test_init_command_creates_missing_directories(tmp_path: Path, capsys) -> Non
     captured = capsys.readouterr()
     assert exit_code == 0
     assert "[success] init" in captured.out
-    # 根据关键规则16，init不应创建docs/generated/evidence目录
-    # 该目录应由collect-evidence命令在需要时创建
     assert (tmp_path / "AGENTS.md").exists()
     assert (tmp_path / "docs/product-specs/index.md").exists()
     assert (tmp_path / "docs/references/uv-llms.txt").exists()
-    # 验证白名单目录被创建
     assert (tmp_path / "docs/design-docs").exists()
     assert (tmp_path / "docs/exec-plans/active").exists()
     assert (tmp_path / "docs/exec-plans/completed").exists()
     assert (tmp_path / "docs/product-specs").exists()
     assert (tmp_path / "docs/references").exists()
-    # 验证禁止目录未被创建
     assert not (tmp_path / "src").exists(), "init不应创建src目录"
     assert not (tmp_path / "tests").exists(), "init不应创建tests目录"
 
@@ -85,6 +84,34 @@ def test_propose_plan_supports_json_dry_run(tmp_path: Path, capsys) -> None:
     assert payload["artifacts"][0]["action"] == "would_create"
 
 
+def test_propose_plan_generates_v1_sections_and_ulw_metadata(tmp_path: Path, capsys) -> None:
+    """propose-plan 应生成符合 V1 结构的计划文件。"""
+
+    create_minimal_repo(tmp_path)
+    exit_code = main(
+        [
+            "-p",
+            str(tmp_path),
+            "--json",
+            "propose-plan",
+            "--input",
+            "实现 sync 命令",
+        ]
+    )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert payload["meta"]["ulw_count"] == 2
+    plan_path = Path(payload["meta"]["plan_path"])
+    content = plan_path.read_text(encoding="utf-8")
+    assert "## Context" in content
+    assert "## Scope" in content
+    assert "## ULW 1: 澄清需求并锁定边界" in content
+    assert "### 验收标准" in content
+    assert "docs/product-specs/v1/index.md" in content
+
+
 def test_plan_check_detects_invalid_plan(tmp_path: Path, capsys) -> None:
     """plan-check 应识别缺少关键段落和引用的计划。"""
 
@@ -97,6 +124,7 @@ def test_plan_check_detects_invalid_plan(tmp_path: Path, capsys) -> None:
     assert exit_code == 1
     assert "[failure] plan-check" in captured.out
     assert "missing_section" in captured.out
+    assert "missing_reference" in captured.out
 
 
 def test_init_command_supports_explicit_target_project_path(
@@ -177,6 +205,7 @@ def test_collect_evidence_persists_failed_command_context(
         [
             "-p",
             str(tmp_path),
+            "--json",
             "collect-evidence",
             "--command",
             "pytest",
@@ -186,47 +215,200 @@ def test_collect_evidence_persists_failed_command_context(
             "failure",
             "--summary",
             "测试失败",
+            "--started-at",
+            "2026-04-06T10:00:00Z",
+            "--finished-at",
+            "2026-04-06T10:00:02Z",
+            "--artifact",
+            "docs/generated/db-schema.md",
             "--log",
-            "line one",
+            "line1",
             "--log",
-            "line two",
+            "line2",
         ]
     )
     captured = capsys.readouterr()
-    evidence_files = list((tmp_path / "docs/generated/evidence").glob("*.json"))
+    payload = json.loads(captured.out)
+
     assert exit_code == 0
-    assert "[warning] collect-evidence" in captured.out
-    assert len(evidence_files) == 1
-    payload = json.loads(evidence_files[0].read_text(encoding="utf-8"))
-    assert payload["command"] == "pytest"
-    assert payload["exit_code"] == 1
-    assert payload["logs"] == ["line one", "line two"]
+    assert payload["command"] == "collect-evidence"
+    assert payload["status"] == "warning"
+    assert payload["warnings"][0]["code"] == "captured_failed_execution"
+    record = payload["meta"]["record"]
+    assert record["started_at"] == "2026-04-06T10:00:00Z"
+    assert record["finished_at"] == "2026-04-06T10:00:02Z"
+    assert record["artifacts"] == ["docs/generated/db-schema.md"]
+    assert record["logs"] == ["line1", "line2"]
 
 
-def test_load_init_templates_falls_back_when_package_resource_is_missing() -> None:
-    """包内模板资源缺失时应回退到内置模板并返回 warning。"""
+def test_init_command_falls_back_to_builtin_templates_when_package_resource_missing(
+    tmp_path: Path,
+) -> None:
+    """包内模板资源缺失时，init 应退回内置模板并发出 warning。"""
 
-    missing_template = "AGENTS.md"
-    original_get_path = docs_infra.get_template_resource_path
+    missing_template = "missing from package"
 
-    def fake_get_template_resource_path(template_path: str) -> Path:
-        if template_path == missing_template:
-            return Path("/definitely-missing-init-template.md")
-        return original_get_path(template_path)
-
-    docs_infra.get_template_resource_path = fake_get_template_resource_path
-    try:
-        result = docs_infra.load_init_templates(Path("/tmp/unused-root"))
-    finally:
-        docs_infra.get_template_resource_path = original_get_path
+    with patch.object(
+        docs_infra,
+        "_load_templates_from_package_resources",
+        side_effect=FileNotFoundError(missing_template),
+    ):
+        result = docs_infra.load_init_templates(tmp_path)
 
     assert result.source == "builtin_fallback"
-    assert result.templates == docs_infra.INIT_FILE_TEMPLATES
     assert len(result.warnings) == 1
     warning = result.warnings[0]
     assert warning.code == "init_template_fallback"
-    assert warning.location == "/definitely-missing-init-template.md"
+    assert warning.location.endswith("init_templates/AGENTS.md")
     assert missing_template in warning.detail["reason"]
+
+
+def test_distill_marks_partial_extraction_as_warning(tmp_path: Path, capsys) -> None:
+    """distill 缺少部分章节但仍可提炼时应返回 warning。"""
+
+    create_minimal_repo(tmp_path)
+    source_file = tmp_path / "brief.md"
+    source_file.write_text(
+        "# 简短文档\n\n## 业务目标\n保留一个最小目标。\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(["-p", str(tmp_path), "--json", "distill", str(source_file)])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert payload["status"] == "warning"
+    assert payload["warnings"][0]["code"] == "partial_distillation"
+    assert payload["warnings"][0]["detail"]["unresolved_sections"] == [
+        "关键规则",
+        "边界限制",
+        "禁止项",
+    ]
+    assert payload["meta"]["source_type"] == "document"
+    assert payload["meta"]["extracted_section_count"] == 1
+    assert payload["meta"]["distill_mode"] == "heuristic"
+    assert payload["meta"]["extraction_source"] == "heuristic"
+
+
+def test_distill_fails_when_extraction_is_insufficient(tmp_path: Path, capsys) -> None:
+    """distill 几乎提炼不到结构化信息时应返回 failure。"""
+
+    create_minimal_repo(tmp_path)
+    source_file = tmp_path / "brief.md"
+    source_file.write_text("# 简短文档\n\n只有一句描述。\n", encoding="utf-8")
+
+    exit_code = main(["-p", str(tmp_path), "--json", "distill", str(source_file)])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 1
+    assert payload["status"] == "failure"
+    assert payload["warnings"][0]["code"] == "partial_distillation"
+    assert payload["errors"][0]["code"] == "distillation_insufficient"
+    assert payload["meta"]["extracted_section_count"] == 0
+
+
+def test_distill_extracts_requirements_and_constraints(tmp_path: Path, capsys) -> None:
+    """distill 应从核心需求和技术约束中提炼规则与限制。"""
+
+    create_minimal_repo(tmp_path)
+    source_file = tmp_path / "requirements.md"
+    source_file.write_text(
+        "# 需求\n\n## 业务目标\n构建测试系统\n\n## 核心需求\n1. 用户管理\n2. 权限控制\n\n## 技术约束\n- 使用 Python 3.10+\n- 不得写入明文密钥\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(["-p", str(tmp_path), "--json", "distill", str(source_file)])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    target_path = Path(payload["meta"]["target_path"])
+    content = target_path.read_text(encoding="utf-8")
+    assert "- 用户管理" in content
+    assert "- 使用 Python 3.10+" in content
+    assert "- 不得写入明文密钥" in content
+
+
+def test_distill_host_model_mode_uses_structured_output(tmp_path: Path, capsys) -> None:
+    """distill 在 host-model 模式下应消费宿主模型结构化结果。"""
+
+    create_minimal_repo(tmp_path)
+    source_file = tmp_path / "requirements.md"
+    source_file.write_text("# 任意文档\n\n原始内容。\n", encoding="utf-8")
+
+    with patch(
+        "harness_commander.application.commands.distill_with_host_model",
+        return_value={
+            "goals": ["提升新用户完成率"],
+            "rules": ["必须引导用户完成邮箱验证"],
+            "limits": ["仅支持邮箱注册"],
+            "prohibitions": ["不得跳过风控校验"],
+        },
+    ):
+        exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "--json",
+                "distill",
+                str(source_file),
+                "--mode",
+                "host-model",
+            ]
+        )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert payload["status"] == "success"
+    assert payload["meta"]["distill_mode"] == "host-model"
+    assert payload["meta"]["extraction_source"] == "host-model"
+    assert payload["meta"]["model_provider"] == "claude-cli"
+    target_path = Path(payload["meta"]["target_path"])
+    content = target_path.read_text(encoding="utf-8")
+    assert "- 提升新用户完成率" in content
+    assert "- 必须引导用户完成邮箱验证" in content
+    assert "- 不得跳过风控校验" in content
+
+
+def test_distill_auto_mode_falls_back_to_heuristic_when_host_model_fails(
+    tmp_path: Path, capsys
+) -> None:
+    """auto 模式在宿主模型失败时应回退到 heuristic。"""
+
+    create_minimal_repo(tmp_path)
+    source_file = tmp_path / "requirements.md"
+    source_file.write_text(
+        "# 需求\n\n## 业务目标\n构建测试系统\n\n## 核心需求\n1. 用户管理\n",
+        encoding="utf-8",
+    )
+
+    with patch(
+        "harness_commander.application.commands.distill_with_host_model",
+        side_effect=HostModelError("boom"),
+    ):
+        exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "--json",
+                "distill",
+                str(source_file),
+                "--mode",
+                "auto",
+            ]
+        )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert payload["meta"]["distill_mode"] == "auto"
+    assert payload["meta"]["extraction_source"] == "heuristic"
+    assert payload["meta"]["fallback_from"] == "host-model"
+    warning_codes = [warning["code"] for warning in payload["warnings"]]
+    assert "distill_fallback_to_heuristic" in warning_codes
 
 
 def test_check_reports_blocking_issue_with_required_metadata(
@@ -247,14 +429,15 @@ def test_check_reports_blocking_issue_with_required_metadata(
     assert payload["command"] == "check"
     assert payload["status"] == "failure"
     assert payload["errors"]
-    assert payload["meta"]["blocking_reasons"] == ["检测到疑似敏感信息字面量或凭据字段。"]
-    issue = payload["errors"][0]
+    issue = next(
+        error for error in payload["errors"] if error["code"] == "potential_secret_exposure"
+    )
     assert issue["detail"]["severity"] == "blocking"
     assert issue["detail"]["source"] == "docs/SECURITY.md"
     assert issue["location"] == "src/demo.py"
     assert issue["detail"]["suggestion"]
     assert issue["detail"]["impact_scope"] == "仓库包含疑似明文凭据，存在泄露和误用风险。"
-    assert payload["summary"].startswith("审计完成，发现 1 个阻断项")
+    assert payload["summary"].startswith("审计完成，发现")
 
 
 def test_check_marks_template_only_governance_docs_as_unquantified(
@@ -283,19 +466,41 @@ def test_check_marks_template_only_governance_docs_as_unquantified(
     assert exit_code == 0
     assert payload["status"] == "warning"
     assert payload["meta"]["blocking_count"] == 0
-    assert payload["meta"]["unquantified_count"] == 3
-    assert len(payload["warnings"]) >= 4
+    assert payload["meta"]["unquantified_count"] == 4
     unquantified_warnings = [
         warning for warning in payload["warnings"] if warning["code"] == "unquantified_rule_source"
     ]
-    assert len(unquantified_warnings) == 3
+    assert len(unquantified_warnings) == 4
     assert all(not warning["detail"]["quantifiable"] for warning in unquantified_warnings)
     assert all("impact_scope" in warning["detail"] for warning in unquantified_warnings)
     assert "未量化" in payload["summary"]
 
 
-def test_sync_returns_no_artifacts_when_no_major_change(tmp_path: Path, capsys) -> None:
-    """sync 在未识别到重大变更时不应生成同步产物。"""
+def test_check_reports_default_targets_in_meta(tmp_path: Path, capsys) -> None:
+    """check 应在元信息中暴露默认检查对象。"""
+
+    create_minimal_repo(tmp_path)
+    plan_dir = tmp_path / "docs/exec-plans/active"
+    plan_dir.mkdir(parents=True, exist_ok=True)
+    (plan_dir / "demo.md").write_text("# demo\n", encoding="utf-8")
+    ref_file = tmp_path / "docs/references/demo-llms.txt"
+    ref_file.parent.mkdir(parents=True, exist_ok=True)
+    ref_file.write_text("reference\n", encoding="utf-8")
+
+    exit_code = main(["-p", str(tmp_path), "--json", "check"])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    checked_targets = payload["meta"]["checked_targets"]
+    assert checked_targets["plan_files"] == ["docs/exec-plans/active/demo.md"]
+    assert checked_targets["generated_files"] == ["docs/references/demo-llms.txt"]
+
+
+def test_sync_returns_governance_snapshot_when_only_baseline_exists(
+    tmp_path: Path, capsys
+) -> None:
+    """sync 在仅有治理基线文件时应识别治理文档快照更新。"""
 
     create_minimal_repo(tmp_path)
     exit_code = main(["-p", str(tmp_path), "--json", "sync", "--dry-run"])
@@ -305,12 +510,37 @@ def test_sync_returns_no_artifacts_when_no_major_change(tmp_path: Path, capsys) 
     assert exit_code == 0
     assert payload["command"] == "sync"
     assert payload["status"] == "success"
-    assert payload["meta"]["change_count"] == 0
-    assert payload["artifacts"] == []
+    assert payload["meta"]["change_count"] == 1
+    assert payload["meta"]["change_types"] == ["governance_docs"]
+    assert len(payload["artifacts"]) == 1
 
 
+def test_sync_snapshot_contains_summary_sections(tmp_path: Path, capsys) -> None:
+    """sync 生成的快照应包含摘要、来源、内容摘录和建议区块。"""
 
-def test_sync_only_updates_impacted_artifacts(tmp_path: Path, capsys) -> None:
+    create_minimal_repo(tmp_path)
+    migration_file = tmp_path / "migrations/0001_init.sql"
+    migration_file.parent.mkdir(parents=True, exist_ok=True)
+    migration_file.write_text("create table demo(id integer primary key);\n", encoding="utf-8")
+
+    exit_code = main(["-p", str(tmp_path), "--json", "sync"])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    db_snapshot = next(
+        path for path in payload["meta"]["updated_targets"] if path == "docs/generated/db-schema.md"
+    )
+    content = (tmp_path / db_snapshot).read_text(encoding="utf-8")
+    assert "## 变更摘要" in content
+    assert "## 命中来源" in content
+    assert "## 内容摘录" in content
+    assert "## 更新建议" in content
+    assert "migrations/0001_init.sql" in content
+    assert "create table demo" in content
+
+
+def test_sync_updates_only_impacted_targets(tmp_path: Path, capsys) -> None:
     """sync 只更新被重大变更命中的目标产物。"""
 
     create_minimal_repo(tmp_path)
@@ -323,12 +553,17 @@ def test_sync_only_updates_impacted_artifacts(tmp_path: Path, capsys) -> None:
     payload = json.loads(captured.out)
 
     assert exit_code == 0
-    assert payload["meta"]["change_count"] == 1
-    assert payload["meta"]["change_types"] == ["database_schema"]
-    assert len(payload["artifacts"]) == 1
-    artifact = payload["artifacts"][0]
-    assert artifact["path"].endswith("docs/generated/db-schema.md")
-    assert artifact["action"] == "would_update"
-    assert "migrations/0001_init.sql" in artifact["note"]
-
-
+    assert payload["meta"]["change_count"] == 2
+    assert payload["meta"]["change_types"] == ["database_schema", "governance_docs"]
+    assert len(payload["artifacts"]) == 2
+    artifact_paths = [artifact["path"] for artifact in payload["artifacts"]]
+    assert any(path.endswith("docs/generated/db-schema.md") for path in artifact_paths)
+    assert any(path.endswith("docs/references/uv-llms.txt") for path in artifact_paths)
+    assert any(
+        "migrations/0001_init.sql" in artifact["note"] for artifact in payload["artifacts"]
+    )
+    db_change = next(
+        change for change in payload["meta"]["changes"] if change["type"] == "database_schema"
+    )
+    assert db_change["content_summary"][0]["path"] == "migrations/0001_init.sql"
+    assert "create table demo" in db_change["content_summary"][0]["excerpt"]

@@ -13,6 +13,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+MAX_SYNC_SUMMARY_FILES = 3
+MAX_SYNC_SUMMARY_LINES = 2
+
+from harness_commander.application.model_tasks import (
+    HostModelError,
+    distill_with_host_model,
+)
 from harness_commander.domain.models import (
     CommandArtifact,
     CommandMessage,
@@ -40,7 +47,6 @@ from harness_commander.infrastructure.filesystem import (
 )
 from harness_commander.infrastructure.templates import (
     INIT_DIRECTORIES,
-    INIT_FILE_TEMPLATES,
     validate_init_targets,
 )
 
@@ -67,18 +73,32 @@ SYNC_RULES: tuple[SyncRule, ...] = (
         reason="检测到数据库结构或迁移相关重大变更，需要刷新数据库快照。",
     ),
     SyncRule(
-        change_type="tooling_reference",
-        trigger_roots=("scripts", "tools", "bin", "nixpacks"),
-        trigger_suffixes=(".nix", ".toml", ".yaml", ".yml", ".json"),
-        target_path="docs/references/nixpacks-llms.txt",
-        reason="检测到公共工具或打包配置变更，需要刷新工具参考材料。",
+        change_type="shared_module",
+        trigger_roots=("src", "shared", "packages", "libs"),
+        trigger_suffixes=(".py", ".ts", ".tsx", ".js", ".jsx"),
+        target_path="docs/references/uv-llms.txt",
+        reason="检测到共享模块或公共实现变更，需要刷新 AI 参考材料。",
     ),
     SyncRule(
-        change_type="reference_source",
-        trigger_roots=("docs/reference-sources", "references/source"),
+        change_type="build_runtime",
+        trigger_roots=("scripts", "tools", "bin", "nixpacks", ".github", "deploy"),
+        trigger_suffixes=(".nix", ".toml", ".yaml", ".yml", ".json", ".sh"),
+        target_path="docs/references/nixpacks-llms.txt",
+        reason="检测到构建、部署或运行方式变更，需要刷新工具参考材料。",
+    ),
+    SyncRule(
+        change_type="governance_docs",
+        trigger_roots=("docs",),
         trigger_suffixes=(".md", ".txt", ".rst"),
         target_path="docs/references/uv-llms.txt",
-        reason="检测到参考资料源文件变更，需要同步参考材料索引。",
+        reason="检测到核心规则文档或参考资料变更，需要刷新治理参考材料。",
+    ),
+    SyncRule(
+        change_type="init_templates",
+        trigger_roots=("src/harness_commander/init_templates",),
+        trigger_suffixes=(".md", ".txt"),
+        target_path="docs/references/uv-llms.txt",
+        reason="检测到初始化模板结构变更，需要刷新模板参考材料。",
     ),
 )
 
@@ -159,6 +179,7 @@ def run_propose_plan(root: Path, *, request: str, dry_run: bool) -> CommandResul
     plan_path = build_plan_path(root, request)
     content = render_plan_markdown(request)
     artifact = write_text(plan_path, content, dry_run=dry_run, overwrite=False)
+    summary = "计划生成完成，已补齐治理文档引用并产出细粒度 ULW 计划。"
     LOGGER.info(
         "propose-plan 命令执行完成 root=%s dry_run=%s plan_path=%s",
         root,
@@ -168,9 +189,25 @@ def run_propose_plan(root: Path, *, request: str, dry_run: bool) -> CommandResul
     return CommandResult(
         command="propose-plan",
         status=ResultStatus.SUCCESS,
-        summary="计划生成完成，已产出符合最小治理要求的执行计划模板。",
+        summary=summary,
         artifacts=[artifact],
-        meta={"root": str(root), "request": request, "dry_run": dry_run},
+        meta={
+            "root": str(root),
+            "request": request,
+            "dry_run": dry_run,
+            "plan_path": str(plan_path),
+            "ulw_count": content.count("## ULW "),
+            "references": [
+                "ARCHITECTURE.md",
+                "docs/PLANS.md",
+                "docs/PRODUCT_SENSE.md",
+                "docs/QUALITY_SCORE.md",
+                "docs/RELIABILITY.md",
+                "docs/SECURITY.md",
+                "docs/design-docs/core-beliefs.md",
+                "docs/product-specs/v1/index.md",
+            ],
+        },
     )
 
 
@@ -190,16 +227,21 @@ def run_plan_check(root: Path, *, plan_path: Path) -> CommandResult:
         return CommandResult(
             command="plan-check",
             status=ResultStatus.FAILURE,
-            summary="计划校验失败，存在缺失字段或约束引用问题。",
+            summary="计划校验失败，存在结构缺失、引用缺失或 ULW 不完整问题。",
             errors=validation.issues,
-            meta={"root": str(root), "plan_path": str(plan_path)},
+            meta={
+                "root": str(root),
+                "plan_path": str(plan_path),
+                "issue_count": len(validation.issues),
+                "issues": [issue.to_dict() for issue in validation.issues],
+            },
         )
     LOGGER.info("plan-check 校验通过 root=%s plan_path=%s", root, plan_path)
     return CommandResult(
         command="plan-check",
         status=ResultStatus.SUCCESS,
-        summary="计划校验通过，结构、引用和 ULW 信息满足最小要求。",
-        meta={"root": str(root), "plan_path": str(plan_path)},
+        summary="计划校验通过，结构章节、治理引用和 ULW 字段均满足要求。",
+        meta={"root": str(root), "plan_path": str(plan_path), "issue_count": 0},
     )
 
 
@@ -211,6 +253,9 @@ def run_collect_evidence(
     summary: str,
     status: str,
     log_lines: list[str],
+    started_at: str | None,
+    finished_at: str | None,
+    artifact_paths: list[str],
     dry_run: bool,
 ) -> CommandResult:
     """生成命令执行证据文件。"""
@@ -225,8 +270,9 @@ def run_collect_evidence(
     )
     evidence_directory = root / "docs/generated/evidence"
     directory_artifact = ensure_directory(evidence_directory, dry_run=dry_run)
-    started_at = utc_timestamp_precise()
-    safe_timestamp = started_at.replace(":", "-")
+    recorded_started_at = started_at or utc_timestamp_precise()
+    recorded_finished_at = finished_at or utc_timestamp_precise()
+    safe_timestamp = recorded_started_at.replace(":", "-")
     evidence_name = f"{safe_timestamp}-{slugify(command, fallback='command')}.json"
     evidence_path = next_available_path(evidence_directory / evidence_name)
     payload = {
@@ -234,14 +280,15 @@ def run_collect_evidence(
         "status": status,
         "summary": summary,
         "exit_code": exit_code,
-        "started_at": started_at,
-        "finished_at": utc_timestamp_precise(),
+        "started_at": recorded_started_at,
+        "finished_at": recorded_finished_at,
         "logs": log_lines,
+        "artifacts": artifact_paths,
     }
     file_artifact = write_json(evidence_path, payload, dry_run=dry_run)
     result_status = ResultStatus.SUCCESS if exit_code == 0 else ResultStatus.WARNING
     result_summary = (
-        "证据记录完成。"
+        "证据记录完成，已保留执行事实、时间范围、关键日志和产物路径。"
         if exit_code == 0
         else "证据记录完成，但被记录命令本身为失败状态。"
     )
@@ -270,6 +317,7 @@ def run_collect_evidence(
             "root": str(root),
             "evidence_path": str(evidence_path),
             "dry_run": dry_run,
+            "record": payload,
         },
     )
 
@@ -333,6 +381,7 @@ def run_sync(root: Path, *, dry_run: bool) -> CommandResult:
         if not matched_inputs:
             continue
 
+        content_summary = _build_sync_content_summary(root, matched_inputs)
         target_path = root / rule.target_path
         artifact = CommandArtifact(
             path=str(target_path),
@@ -347,7 +396,7 @@ def run_sync(root: Path, *, dry_run: bool) -> CommandResult:
         if not dry_run:
             target_path.parent.mkdir(parents=True, exist_ok=True)
             target_path.write_text(
-                _render_sync_snapshot(rule, matched_inputs),
+                _render_sync_snapshot(rule, matched_inputs, content_summary),
                 encoding="utf-8",
                 newline="\n",
             )
@@ -357,6 +406,8 @@ def run_sync(root: Path, *, dry_run: bool) -> CommandResult:
                 "type": rule.change_type,
                 "target": rule.target_path,
                 "inputs": matched_inputs,
+                "reason": rule.reason,
+                "content_summary": content_summary,
             }
         )
 
@@ -387,30 +438,32 @@ def run_sync(root: Path, *, dry_run: bool) -> CommandResult:
             "change_count": change_count,
             "change_types": [change["type"] for change in matched_changes],
             "changes": matched_changes,
+            "updated_targets": [change["target"] for change in matched_changes],
         },
     )
 
 
-def run_distill(root: Path, *, source_path: str, dry_run: bool) -> CommandResult:
-    """将长文档压缩为参考材料。
-
-    该命令提取文档中的业务目标、关键规则、边界限制和禁止项，
-    生成 `*-llms.txt` 格式的参考材料，保存在 `docs/references/` 目录下。
-    """
+def run_distill(
+    root: Path,
+    *,
+    source_path: str,
+    dry_run: bool,
+    mode: str = "heuristic",
+) -> CommandResult:
+    """将长文档压缩为参考材料。"""
 
     LOGGER.info(
-        "开始执行 distill 命令 root=%s source_path=%s dry_run=%s",
+        "开始执行 distill 命令 root=%s source_path=%s dry_run=%s mode=%s",
         root,
         source_path,
         dry_run,
+        mode,
     )
 
-    # 解析源文档路径
     source_file = Path(source_path)
     if not source_file.is_absolute():
         source_file = root / source_path
 
-    # 检查源文件是否存在
     if not source_file.exists():
         raise HarnessCommanderError(
             code="source_not_found",
@@ -419,12 +472,16 @@ def run_distill(root: Path, *, source_path: str, dry_run: bool) -> CommandResult
             detail={"source_path": str(source_file)},
         )
 
-    # 提取文件名和生成目标路径
     source_name = source_file.stem
     target_name = f"{source_name}-llms.txt"
     target_file = root / "docs" / "references" / target_name
+    selected_mode = mode
+    extraction_source = "heuristic"
+    fallback_from: str | None = None
+    fallback_reason: str | None = None
+    model_provider: str | None = None
+    model_name: str | None = None
 
-    # 读取源文档内容
     try:
         content = source_file.read_text(encoding="utf-8")
     except Exception as error:
@@ -435,16 +492,65 @@ def run_distill(root: Path, *, source_path: str, dry_run: bool) -> CommandResult
             detail={"source_path": str(source_file)},
         ) from error
 
-    # 提取关键信息（简化实现，实际应使用更复杂的解析逻辑）
-    # 这里我们假设文档包含特定的章节标记
-    distilled_content = extract_key_information(content, source_name)
-
-    # 生成产物
-    artifact = write_text(
-        target_file, distilled_content, dry_run=dry_run, overwrite=True
+    distilled_content, extraction_report = _run_distill_extraction(
+        content=content,
+        source_name=source_name,
+        mode=selected_mode,
     )
+    extraction_source = extraction_report["extraction_source"]
+    fallback_from = extraction_report["fallback_from"]
+    fallback_reason = extraction_report["fallback_reason"]
+    model_provider = extraction_report["model_provider"]
+    model_name = extraction_report["model_name"]
+    warnings: list[CommandMessage] = []
+    errors: list[CommandMessage] = []
+    unresolved_sections = extraction_report["unresolved_sections"]
+    extracted_section_count = extraction_report["extracted_section_count"]
 
-    summary = f"已将文档 {source_name} 压缩为参考材料 {target_name}"
+    if fallback_from:
+        warnings.append(
+            CommandMessage(
+                code="distill_fallback_to_heuristic",
+                message="宿主模型结果不可用，已回退到规则提炼路径。",
+                location=str(source_file),
+                detail={
+                    "source_path": str(source_file),
+                    "fallback_from": fallback_from,
+                    "fallback_reason": fallback_reason,
+                },
+            )
+        )
+
+    if unresolved_sections:
+        warnings.append(
+            CommandMessage(
+                code="partial_distillation",
+                message="部分核心信息未被明确识别，请人工复核摘要是否完整。",
+                location=str(source_file),
+                detail={
+                    "source_path": str(source_file),
+                    "unresolved_sections": unresolved_sections,
+                },
+            )
+        )
+
+    if extracted_section_count == 0:
+        errors.append(
+            CommandMessage(
+                code="distillation_insufficient",
+                message="提炼结果不足以支撑参考材料，请补充更完整的结构化输入。",
+                location=str(source_file),
+                detail={
+                    "source_path": str(source_file),
+                    "extracted_section_count": extracted_section_count,
+                    "unresolved_sections": unresolved_sections,
+                },
+            )
+        )
+
+    artifact = write_text(target_file, distilled_content, dry_run=dry_run, overwrite=True)
+
+    summary = f"已将输入材料 {source_name} 压缩为参考材料 {target_name}。"
     LOGGER.info(
         "distill 命令执行完成 root=%s source=%s target=%s dry_run=%s",
         root,
@@ -455,9 +561,15 @@ def run_distill(root: Path, *, source_path: str, dry_run: bool) -> CommandResult
 
     return CommandResult(
         command="distill",
-        status=ResultStatus.SUCCESS,
+        status=(
+            ResultStatus.FAILURE
+            if errors
+            else ResultStatus.WARNING if warnings else ResultStatus.SUCCESS
+        ),
         summary=summary,
         artifacts=[artifact],
+        warnings=warnings,
+        errors=errors,
         meta={
             "root": str(root),
             "source_path": str(source_file),
@@ -465,195 +577,176 @@ def run_distill(root: Path, *, source_path: str, dry_run: bool) -> CommandResult
             "dry_run": dry_run,
             "source_name": source_name,
             "target_name": target_name,
+            "source_type": _classify_distill_source(source_file),
+            "extracted_section_count": extracted_section_count,
+            "unresolved_sections": unresolved_sections,
+            "distill_mode": selected_mode,
+            "extraction_source": extraction_source,
+            "fallback_from": fallback_from,
+            "fallback_reason": fallback_reason,
+            "model_provider": model_provider,
+            "model_name": model_name,
         },
     )
 
 
-def extract_key_information(content: str, source_name: str) -> str:
-    """从文档内容中提取关键信息。
+def _classify_distill_source(source_file: Path) -> str:
+    """识别 distill 输入材料类型。"""
 
-    提取业务目标、关键规则、边界限制和禁止项。
-    这是一个简化实现，实际应使用更复杂的自然语言处理或模式匹配。
-    """
+    suffix = source_file.suffix.lower()
+    if source_file.is_dir():
+        return "code_directory"
+    if suffix in {".md", ".txt", ".rst"}:
+        return "document"
+    return "external_reference"
+
+
+def _run_distill_extraction(
+    *,
+    content: str,
+    source_name: str,
+    mode: str,
+) -> tuple[str, dict[str, Any]]:
+    """按指定模式执行 distill 提炼。"""
+
+    if mode not in {"heuristic", "host-model", "auto"}:
+        raise HarnessCommanderError(
+            code="invalid_distill_mode",
+            message=f"不支持的 distill 模式：{mode}",
+            location="distill",
+            detail={"mode": mode},
+        )
+
+    extraction_source = "heuristic"
+    fallback_from: str | None = None
+    fallback_reason: str | None = None
+    model_provider: str | None = None
+    model_name: str | None = None
+
+    if mode in {"host-model", "auto"}:
+        model_provider = "claude-cli"
+        model_name = "claude"
+        try:
+            structured = distill_with_host_model(source_name=source_name, content=content)
+        except HostModelError as error:
+            fallback_from = "host-model"
+            fallback_reason = str(error)
+        else:
+            distilled_content, extraction_report = _render_distill_from_sections(
+                goals=structured["goals"],
+                rules=structured["rules"],
+                limits=structured["limits"],
+                prohibitions=structured["prohibitions"],
+                source_name=source_name,
+                source_meta={"host_model_used": True},
+            )
+            extraction_report.update(
+                {
+                    "extraction_source": "host-model",
+                    "fallback_from": None,
+                    "fallback_reason": None,
+                    "model_provider": model_provider,
+                    "model_name": model_name,
+                }
+            )
+            return distilled_content, extraction_report
+
+    distilled_content, extraction_report = extract_key_information(content, source_name)
+    extraction_report.update(
+        {
+            "extraction_source": extraction_source,
+            "fallback_from": fallback_from,
+            "fallback_reason": fallback_reason,
+            "model_provider": model_provider,
+            "model_name": model_name,
+        }
+    )
+    return distilled_content, extraction_report
+
+
+def extract_key_information(content: str, source_name: str) -> tuple[str, dict[str, Any]]:
+    """从文档内容中提取关键信息，并返回提炼报告。"""
 
     lines = content.split("\n")
-    distilled_lines = []
+    goals = _collect_section_items(lines, ("业务目标", "目标", "Why"))
+    rules = _collect_section_items(
+        lines,
+        ("关键规则", "规则", "核心逻辑", "核心需求", "需求", "Business Logic"),
+    )
+    limits = _collect_section_items(
+        lines,
+        ("边界限制", "限制", "技术约束", "约束", "Scope", "Non-Goals"),
+    )
+    prohibitions = _collect_section_items(lines, ("禁止项", "禁止", "Non-Goals"))
 
-    # 添加标题
-    distilled_lines.append(f"# {source_name} 参考材料")
-    distilled_lines.append("")
-    distilled_lines.append("## 业务目标")
-    distilled_lines.append("")
+    if not rules:
+        rules = _collect_keyword_lines(lines, ("必须", "应", "需要", "不得", "禁止"))
+    if not limits:
+        limits = _collect_keyword_lines(lines, ("限制", "约束", "仅", "支持", "范围"))
+    if not prohibitions:
+        prohibitions = _collect_keyword_lines(lines, ("不得", "禁止", "不应", "不要"))
 
-    # 提取业务目标（查找章节标题后的内容）
-    in_goals_section = False
-    goals = []
-    for _i, line in enumerate(lines):
-        line_stripped = line.strip()
+    return _render_distill_from_sections(
+        goals=goals,
+        rules=rules,
+        limits=limits,
+        prohibitions=prohibitions,
+        source_name=source_name,
+        source_meta={"提取行数": len(lines)},
+    )
 
-        # 检测业务目标章节
-        if line_stripped.startswith("## 业务目标") or line_stripped.startswith(
-            "## 目标"
-        ):
-            in_goals_section = True
-            continue
 
-        # 检测下一个章节开始
-        if in_goals_section and line_stripped.startswith("## "):
-            break
+def _render_distill_from_sections(
+    *,
+    goals: list[str],
+    rules: list[str],
+    limits: list[str],
+    prohibitions: list[str],
+    source_name: str,
+    source_meta: dict[str, Any] | None = None,
+) -> tuple[str, dict[str, Any]]:
+    """把四类结构化信息渲染为标准 distill 输出。"""
 
-        # 收集业务目标内容
-        if in_goals_section and line_stripped and not line_stripped.startswith("#"):
-            # 移除列表标记和编号
-            clean_line = line_stripped
-            if clean_line.startswith("- "):
-                clean_line = clean_line[2:]
-            elif clean_line.startswith("* "):
-                clean_line = clean_line[2:]
-            elif clean_line[0].isdigit() and ". " in clean_line:
-                clean_line = clean_line.split(". ", 1)[1]
+    sections = {
+        "业务目标": goals,
+        "关键规则": rules,
+        "边界限制": limits,
+        "禁止项": prohibitions,
+    }
+    unresolved_sections = [name for name, items in sections.items() if not items]
+    extracted_section_count = sum(1 for items in sections.values() if items)
 
-            if clean_line:
-                goals.append(clean_line)
+    distilled_lines = [
+        f"# {source_name} 参考材料",
+        "",
+        "## 业务目标",
+        "",
+        *_render_distilled_section(goals, "未明确识别业务目标"),
+        "",
+        "## 关键规则",
+        "",
+        *_render_distilled_section(rules, "未明确识别关键规则"),
+        "",
+        "## 边界限制",
+        "",
+        *_render_distilled_section(limits, "未明确识别边界限制"),
+        "",
+        "## 禁止项",
+        "",
+        *_render_distilled_section(prohibitions, "未明确识别禁止项"),
+        "",
+        "## 原始文档信息",
+        f"- 原始文档：{source_name}",
+        f"- 提取时间：{utc_timestamp()}",
+    ]
+    if source_meta:
+        for key, value in source_meta.items():
+            distilled_lines.append(f"- {key}: {value}")
 
-    if goals:
-        for goal in goals:
-            distilled_lines.append(f"- {goal}")
-    else:
-        distilled_lines.append("- 未明确识别业务目标")
-
-    distilled_lines.append("")
-    distilled_lines.append("## 关键规则")
-    distilled_lines.append("")
-
-    # 提取关键规则（查找章节标题后的内容）
-    in_rules_section = False
-    rules = []
-    for _i, line in enumerate(lines):
-        line_stripped = line.strip()
-
-        # 检测关键规则章节
-        if line_stripped.startswith("## 关键规则") or line_stripped.startswith(
-            "## 规则"
-        ):
-            in_rules_section = True
-            continue
-
-        # 检测下一个章节开始
-        if in_rules_section and line_stripped.startswith("## "):
-            break
-
-        # 收集关键规则内容
-        if in_rules_section and line_stripped and not line_stripped.startswith("#"):
-            # 移除列表标记和编号
-            clean_line = line_stripped
-            if clean_line.startswith("- "):
-                clean_line = clean_line[2:]
-            elif clean_line.startswith("* "):
-                clean_line = clean_line[2:]
-            elif clean_line[0].isdigit() and ". " in clean_line:
-                clean_line = clean_line.split(". ", 1)[1]
-
-            if clean_line:
-                rules.append(clean_line)
-
-    if rules:
-        for rule in rules:
-            distilled_lines.append(f"- {rule}")
-    else:
-        distilled_lines.append("- 未明确识别关键规则")
-
-    distilled_lines.append("")
-    distilled_lines.append("## 边界限制")
-    distilled_lines.append("")
-
-    # 提取边界限制（查找章节标题后的内容）
-    in_limits_section = False
-    limits = []
-    for _i, line in enumerate(lines):
-        line_stripped = line.strip()
-
-        # 检测边界限制章节
-        if line_stripped.startswith("## 边界限制") or line_stripped.startswith(
-            "## 限制"
-        ):
-            in_limits_section = True
-            continue
-
-        # 检测下一个章节开始
-        if in_limits_section and line_stripped.startswith("## "):
-            break
-
-        # 收集边界限制内容
-        if in_limits_section and line_stripped and not line_stripped.startswith("#"):
-            # 移除列表标记和编号
-            clean_line = line_stripped
-            if clean_line.startswith("- "):
-                clean_line = clean_line[2:]
-            elif clean_line.startswith("* "):
-                clean_line = clean_line[2:]
-            elif clean_line[0].isdigit() and ". " in clean_line:
-                clean_line = clean_line.split(". ", 1)[1]
-
-            if clean_line:
-                limits.append(clean_line)
-
-    if limits:
-        for limit in limits:
-            distilled_lines.append(f"- {limit}")
-    else:
-        distilled_lines.append("- 未明确识别边界限制")
-
-    distilled_lines.append("")
-    distilled_lines.append("## 禁止项")
-    distilled_lines.append("")
-
-    # 提取禁止项（查找章节标题后的内容）
-    in_prohibitions_section = False
-    prohibitions = []
-    for _i, line in enumerate(lines):
-        line_stripped = line.strip()
-
-        # 检测禁止项章节
-        if line_stripped.startswith("## 禁止项") or line_stripped.startswith("## 禁止"):
-            in_prohibitions_section = True
-            continue
-
-        # 检测下一个章节开始
-        if in_prohibitions_section and line_stripped.startswith("## "):
-            break
-
-        # 收集禁止项内容
-        if (
-            in_prohibitions_section
-            and line_stripped
-            and not line_stripped.startswith("#")
-        ):
-            # 移除列表标记和编号
-            clean_line = line_stripped
-            if clean_line.startswith("- "):
-                clean_line = clean_line[2:]
-            elif clean_line.startswith("* "):
-                clean_line = clean_line[2:]
-            elif clean_line[0].isdigit() and ". " in clean_line:
-                clean_line = clean_line.split(". ", 1)[1]
-
-            if clean_line:
-                prohibitions.append(clean_line)
-
-    if prohibitions:
-        for prohibition in prohibitions:
-            distilled_lines.append(f"- {prohibition}")
-    else:
-        distilled_lines.append("- 未明确识别禁止项")
-
-    distilled_lines.append("")
-    distilled_lines.append("## 原始文档信息")
-    distilled_lines.append(f"- 原始文档：{source_name}")
-    distilled_lines.append(f"- 提取时间：{utc_timestamp()}")
-    distilled_lines.append(f"- 提取行数：{len(lines)}")
-
-    return "\n".join(distilled_lines)
+    return "\n".join(distilled_lines), {
+        "unresolved_sections": unresolved_sections,
+        "extracted_section_count": extracted_section_count,
+    }
 
 
 def _relative_location(path: Path, root: Path) -> str:
@@ -665,6 +758,160 @@ def _relative_location(path: Path, root: Path) -> str:
         return str(path)
 
 
+
+def _collect_section_items(lines: list[str], section_names: tuple[str, ...]) -> list[str]:
+    """按章节标题提取 bullet / 段落内容。"""
+
+    normalized_names = tuple(name.lower() for name in section_names)
+    in_section = False
+    items: list[str] = []
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line.startswith("## "):
+            heading = line[3:].strip().lower()
+            in_section = any(name in heading for name in normalized_names)
+            continue
+        if in_section and line.startswith("#"):
+            break
+        if in_section:
+            cleaned = _clean_distill_line(line)
+            if cleaned:
+                items.append(cleaned)
+    return _deduplicate_items(items)
+
+
+
+def _collect_keyword_lines(lines: list[str], keywords: tuple[str, ...]) -> list[str]:
+    """按关键词回收可能属于目标/规则/限制的行。"""
+
+    items = []
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        cleaned = _clean_distill_line(line)
+        if cleaned and any(keyword in cleaned for keyword in keywords):
+            items.append(cleaned)
+    return _deduplicate_items(items)
+
+
+
+def _clean_distill_line(line: str) -> str:
+    """清洗提炼出的单行内容。"""
+
+    cleaned = line.strip()
+    if cleaned.startswith("- ") or cleaned.startswith("* "):
+        cleaned = cleaned[2:]
+    elif cleaned[:1].isdigit() and ". " in cleaned:
+        cleaned = cleaned.split(". ", 1)[1]
+    return cleaned.strip()
+
+
+
+def _deduplicate_items(items: list[str]) -> list[str]:
+    """保序去重。"""
+
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for item in items:
+        if item in seen:
+            continue
+        seen.add(item)
+        deduped.append(item)
+    return deduped
+
+
+
+def _render_distilled_section(items: list[str], fallback: str) -> list[str]:
+    """渲染 distill 分节内容。"""
+
+    if not items:
+        return [f"- {fallback}"]
+    return [f"- {item}" for item in items]
+
+
+def _build_sync_content_summary(root: Path, matched_inputs: list[str]) -> list[dict[str, str]]:
+    """基于命中文件内容生成简短摘要，避免 sync 只回显路径。"""
+
+    summaries: list[dict[str, str]] = []
+    for relative_path in matched_inputs[:MAX_SYNC_SUMMARY_FILES]:
+        file_path = root / relative_path
+        excerpt = _summarize_sync_file(file_path)
+        if not excerpt:
+            continue
+        summaries.append({"path": relative_path, "excerpt": excerpt})
+    return summaries
+
+
+def _summarize_sync_file(file_path: Path) -> str:
+    """提取适合放入 sync 快照的简短内容片段。"""
+
+    if not file_path.exists() or not file_path.is_file():
+        return ""
+
+    try:
+        content = file_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return ""
+
+    lines = []
+    for raw_line in content.splitlines():
+        cleaned = raw_line.strip()
+        if not cleaned:
+            continue
+        if cleaned.startswith(("#", "-", "*")) or "create table" in cleaned.lower():
+            lines.append(cleaned)
+        elif len(cleaned) <= 80:
+            lines.append(cleaned)
+        if len(lines) >= MAX_SYNC_SUMMARY_LINES:
+            break
+
+    if not lines:
+        condensed = " ".join(content.split())
+        if not condensed:
+            return ""
+        return condensed[:120]
+
+    return " | ".join(lines)
+
+
+def _render_sync_snapshot(
+    rule: SyncRule,
+    matched_inputs: list[str],
+    content_summary: list[dict[str, str]],
+) -> str:
+    """渲染同步产物内容，记录触发来源、摘要与更新时间。"""
+
+    lines = [
+        f"# {rule.change_type} sync snapshot",
+        "",
+        "## 变更摘要",
+        f"- 目标产物：{rule.target_path}",
+        f"- 触发原因：{rule.reason}",
+        f"- 同步时间：{utc_timestamp()}",
+        f"- 命中文件数：{len(matched_inputs)}",
+        "",
+        "## 命中来源",
+    ]
+    lines.extend(f"- {path}" for path in matched_inputs)
+    lines.extend(["", "## 内容摘录"])
+    if content_summary:
+        lines.extend(
+            f"- {item['path']}: {item['excerpt']}" for item in content_summary
+        )
+    else:
+        lines.append("- 未提取到可展示的内容摘录，请人工查看命中文件。")
+    lines.extend(
+        [
+            "",
+            "## 更新建议",
+            "- 复核目标产物是否覆盖当前重大变更的核心约束。",
+            "- 如需更高质量摘要，可在此基础上补充结构化说明与边界限制。",
+        ]
+    )
+    return "\n".join(lines) + "\n"
 
 def _find_sync_triggers(root: Path) -> list[str]:
     """收集可能触发文档同步的输入文件。"""
@@ -691,25 +938,26 @@ def _matches_sync_rule(relative_path: str, rule: SyncRule) -> bool:
     """判断某个文件是否命中指定 sync 规则。"""
 
     normalized = relative_path.replace("\\", "/")
-    return any(
-        normalized == trigger_root or normalized.startswith(f"{trigger_root}/")
-        for trigger_root in rule.trigger_roots
-    )
-
-
-def _render_sync_snapshot(rule: SyncRule, matched_inputs: list[str]) -> str:
-    """渲染同步产物内容，记录触发来源与更新时间。"""
-
-    lines = [
-        f"# {rule.change_type} sync snapshot",
-        "",
-        f"- target: {rule.target_path}",
-        f"- reason: {rule.reason}",
-        f"- synced_at: {utc_timestamp()}",
-        "- inputs:",
-    ]
-    lines.extend(f"  - {path}" for path in matched_inputs)
-    return "\n".join(lines) + "\n"
+    if normalized.startswith("docs/generated/") or normalized.startswith("docs/references/"):
+        return False
+    if rule.change_type == "governance_docs":
+        allowed_files = {
+            "ARCHITECTURE.md",
+            "docs/PLANS.md",
+            "docs/PRODUCT_SENSE.md",
+            "docs/QUALITY_SCORE.md",
+            "docs/RELIABILITY.md",
+            "docs/SECURITY.md",
+            "docs/design-docs/core-beliefs.md",
+        }
+        root_match = normalized in allowed_files
+    else:
+        root_match = any(
+            normalized == trigger_root or normalized.startswith(f"{trigger_root}/")
+            for trigger_root in rule.trigger_roots
+        )
+    suffix_match = normalized.endswith(rule.trigger_suffixes)
+    return root_match and suffix_match
 
 
 def _build_check_issue(
@@ -785,11 +1033,13 @@ def run_check(root: Path, *, dry_run: bool) -> CommandResult:
         "quality": root / "docs/QUALITY_SCORE.md",
         "security": root / "docs/SECURITY.md",
         "core_beliefs": root / "docs/design-docs/core-beliefs.md",
+        "product": root / "docs/product-specs/v1/index.md",
     }
     source_labels = {
         "quality": "docs/QUALITY_SCORE.md",
         "security": "docs/SECURITY.md",
         "core_beliefs": "docs/design-docs/core-beliefs.md",
+        "product": "docs/product-specs/v1/index.md",
     }
     blocking_issues: list[CommandMessage] = []
     warning_issues: list[CommandMessage] = []
@@ -797,25 +1047,29 @@ def run_check(root: Path, *, dry_run: bool) -> CommandResult:
     for source_name, source_path in governance_sources.items():
         source_label = source_labels[source_name]
         impact_scope = (
-            "无法完成基于质量、安全和团队信仰规则的审计。"
+            "无法完成基于质量规则的审计。"
             if source_name == "quality"
             else "无法完成安全规则审计。"
             if source_name == "security"
             else "无法完成团队信仰规则审计。"
+            if source_name == "core_beliefs"
+            else "无法完成产品约束审计。"
         )
         if not source_path.exists():
-            blocking_issues.append(
-                _build_check_issue(
-                    code="missing_governance_source",
-                    message="审计所需规则文档缺失。",
-                    severity="blocking",
-                    source=source_label,
-                    location=_relative_location(source_path, root),
-                    suggestion="先补齐治理文档，再重新执行 harness check。",
-                    quantifiable=True,
-                    impact_scope=impact_scope,
-                )
+            issue = _build_check_issue(
+                code="missing_governance_source",
+                message="审计所需规则文档缺失。",
+                severity="warning" if source_name == "product" else "blocking",
+                source=source_label,
+                location=_relative_location(source_path, root),
+                suggestion="先补齐治理文档，再重新执行 harness check。",
+                quantifiable=True,
+                impact_scope=impact_scope,
             )
+            if source_name == "product":
+                warning_issues.append(issue)
+            else:
+                blocking_issues.append(issue)
             continue
         content = source_path.read_text(encoding="utf-8")
         if not content.strip():
@@ -846,21 +1100,41 @@ def run_check(root: Path, *, dry_run: bool) -> CommandResult:
                 )
             )
 
-    python_files = _find_python_files(root)
-    if not python_files:
+    plan_files = sorted((root / "docs/exec-plans/active").glob("*.md")) if (root / "docs/exec-plans/active").exists() else []
+    generated_files = []
+    for generated_root in (root / "docs/generated", root / "docs/references"):
+        if generated_root.exists():
+            generated_files.extend(path for path in generated_root.rglob("*") if path.is_file())
+
+    if not plan_files:
         warning_issues.append(
             _build_check_issue(
-                code="no_python_files_detected",
-                message="未检测到可审计的 Python 源码文件。",
+                code="missing_plan_targets",
+                message="未检测到计划文件，默认检查对象不完整。",
                 severity="warning",
-                source="docs/QUALITY_SCORE.md",
-                location="src/",
-                suggestion="如果项目尚未进入实现阶段，可忽略；否则补齐源码后重跑审计。",
+                source="docs/product-specs/v1/index.md",
+                location="docs/exec-plans/active/",
+                suggestion="先生成或补齐计划文件，再重新执行审计。",
                 quantifiable=True,
-                impact_scope="当前只能校验治理文档，无法对实现代码执行质量与安全扫描。",
+                impact_scope="当前无法验证计划文件是否满足默认检查要求。",
             )
         )
 
+    if not generated_files:
+        warning_issues.append(
+            _build_check_issue(
+                code="missing_generated_targets",
+                message="未检测到生成文档或参考材料，默认检查对象不完整。",
+                severity="warning",
+                source="docs/product-specs/v1/index.md",
+                location="docs/generated/ 或 docs/references/",
+                suggestion="在执行 sync 或 distill 后重新运行审计。",
+                quantifiable=True,
+                impact_scope="当前无法验证生成文档和参考材料是否与变更保持同步。",
+            )
+        )
+
+    python_files = _find_python_files(root)
     for path in python_files:
         if _file_contains_secret_literal(path):
             blocking_issues.append(
@@ -892,8 +1166,7 @@ def run_check(root: Path, *, dry_run: bool) -> CommandResult:
                         impact_scope="测试样例可能把真实凭据或可复用密钥暴露到仓库历史中。",
                     )
                 )
-
-    if not tests_path.exists():
+    else:
         warning_issues.append(
             _build_check_issue(
                 code="missing_tests_directory",
@@ -919,9 +1192,7 @@ def run_check(root: Path, *, dry_run: bool) -> CommandResult:
             if not match:
                 continue
             function_name = match.group(1)
-            duplicate_impls.setdefault(function_name, []).append(
-                _relative_location(path, root)
-            )
+            duplicate_impls.setdefault(function_name, []).append(_relative_location(path, root))
     for function_name, locations in sorted(duplicate_impls.items()):
         unique_locations = sorted(set(locations))
         if len(unique_locations) > 1 and function_name.startswith(("validate_", "ensure_")):
@@ -947,15 +1218,13 @@ def run_check(root: Path, *, dry_run: bool) -> CommandResult:
 
     if blocking_issues:
         status = ResultStatus.FAILURE
-        summary = (
-            f"审计完成，发现 {blocking_count} 个阻断项与 {warning_count} 个提醒项。"
-        )
+        summary = f"审计完成，发现 {blocking_count} 个阻断项与 {warning_count} 个提醒项。"
     elif warning_issues:
         status = ResultStatus.WARNING
         summary = f"审计完成，无阻断项，存在 {warning_count} 个提醒项。"
     else:
         status = ResultStatus.SUCCESS
-        summary = "审计完成，质量、安全与团队信仰规则均未发现阻断问题。"
+        summary = "审计完成，质量、安全、团队信仰和产品规则均未发现阻断问题。"
 
     if unquantified_count:
         summary = f"{summary} 其中 {unquantified_count} 项规则源仍未量化。"
@@ -984,6 +1253,10 @@ def run_check(root: Path, *, dry_run: bool) -> CommandResult:
             "issue_count": total_issues,
             "unquantified_count": unquantified_count,
             "blocking_reasons": blocking_reasons,
+            "checked_targets": {
+                "plan_files": [_relative_location(path, root) for path in plan_files],
+                "generated_files": [_relative_location(path, root) for path in generated_files],
+            },
             "checks": {
                 "blocking": [issue.to_dict() for issue in blocking_issues],
                 "warnings": [issue.to_dict() for issue in warning_issues],
