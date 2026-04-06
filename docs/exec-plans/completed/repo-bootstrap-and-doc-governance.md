@@ -25,7 +25,7 @@
 
 - GitHub 仓库地址：`https://github.com/JansenChang/harness-commander`
 - 仓库可见性：`PRIVATE`
-- 本地项目目录：`/Users/jansen/project/python/harness-commander`
+- 本地项目目录（示例）：`<repo-root>`
 - 初始化提交：`ffb8bf9 chore: initialize project`
 - 当前远程同步提交：`9e26835 docs: clarify initial commit reference`
 

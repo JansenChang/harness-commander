@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -u
 
-ROOT="/Users/jansen/project/python/harness-commander"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TMP_DIR="$ROOT/.claude/tmp"
 STATUS_FILE="$TMP_DIR/last-verify.status"
 LOG_FILE="$TMP_DIR/last-verify.txt"
