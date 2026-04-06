@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="/Users/jansen/project/python/harness-commander"
 STATUS_FILE="$ROOT/.claude/tmp/last-verify.status"
 
 cd "$ROOT"

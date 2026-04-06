@@ -23,4 +23,4 @@ cp "$SOURCE_SKILL_DIR/SKILL.md" "$TARGET_SKILL_DIR/SKILL.md"
 printf 'installed project skill to %s\n' "$TARGET_SKILL_DIR"
 printf 'verify in Claude Code with:\n'
 printf '  /harness init -p /tmp/harness-skill-smoke\n'
-printf '  /harness distill -p /tmp/harness-skill-smoke --json /tmp/harness-skill-smoke/requirements.md "整理为 llms 上下文包"\n'
+printf '  /harness distill -p /tmp/harness-skill-smoke /tmp/harness-skill-smoke/requirements.md --json\n'

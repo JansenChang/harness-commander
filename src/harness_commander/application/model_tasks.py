@@ -9,12 +9,12 @@ from typing import Any
 DISTILL_SCHEMA = {
     "type": "object",
     "properties": {
-        "summary": {"type": "string"},
-        "key_relationships": {"type": "array", "items": {"type": "string"}},
-        "reference_units": {"type": "array", "items": {"type": "string"}},
-        "agent_guidance": {"type": "array", "items": {"type": "string"}},
+        "goals": {"type": "array", "items": {"type": "string"}},
+        "rules": {"type": "array", "items": {"type": "string"}},
+        "limits": {"type": "array", "items": {"type": "string"}},
+        "prohibitions": {"type": "array", "items": {"type": "string"}},
     },
-    "required": ["summary", "key_relationships", "reference_units", "agent_guidance"],
+    "required": ["goals", "rules", "limits", "prohibitions"],
     "additionalProperties": False,
 }
 
@@ -23,21 +23,10 @@ class HostModelError(RuntimeError):
     """宿主模型调用失败。"""
 
 
-def distill_with_host_model(
-    *,
-    instruction: str,
-    input_descriptions: list[str],
-    bundled_content: str,
-    interactive: bool,
-) -> dict[str, Any]:
-    """调用 Claude CLI 生成结构化上下文包。"""
+def distill_with_host_model(*, source_name: str, content: str) -> dict[str, list[str]]:
+    """调用 Claude CLI 生成四类结构化提炼结果。"""
 
-    prompt = _build_distill_prompt(
-        instruction=instruction,
-        input_descriptions=input_descriptions,
-        bundled_content=bundled_content,
-        interactive=interactive,
-    )
+    prompt = _build_distill_prompt(source_name=source_name, content=content)
     command = [
         "claude",
         "-p",
@@ -71,63 +60,36 @@ def distill_with_host_model(
         raise HostModelError("Claude CLI 返回内容无法解析为结构化结果。") from error
 
     normalized = {
-        "summary": _normalize_text(structured_output.get("summary", "")),
-        "key_relationships": _normalize_items(structured_output.get("key_relationships", [])),
-        "reference_units": _normalize_items(structured_output.get("reference_units", [])),
-        "agent_guidance": _normalize_items(structured_output.get("agent_guidance", [])),
+        key: _normalize_items(structured_output.get(key, []))
+        for key in ("goals", "rules", "limits", "prohibitions")
     }
-    if not normalized["summary"] and not any(
-        normalized[key] for key in ("key_relationships", "reference_units", "agent_guidance")
-    ):
+    if not any(normalized.values()):
         raise HostModelError("宿主模型未返回可用的结构化提炼内容。")
     return normalized
 
 
-def _build_distill_prompt(
-    *,
-    instruction: str,
-    input_descriptions: list[str],
-    bundled_content: str,
-    interactive: bool,
-) -> str:
+def _build_distill_prompt(*, source_name: str, content: str) -> str:
     """构建 distill 的宿主模型提示词。"""
 
-    interaction_note = "用户允许后续多轮对话收敛格式。" if interactive else "当前先输出一版默认结构化结果。"
-    source_list = "\n".join(f"- {item}" for item in input_descriptions)
-    return f"""你在为 Harness-Commander 的 distill 命令生成 `.llms` 结构化上下文包。
+    return f"""你在为 Harness-Commander 的 distill 命令提炼参考材料。
 
-目标：
-- 根据用户说明和输入材料，提炼给下游 LLM / Agent 使用的机器可读上下文。
-- 不局限于文档摘要，也可以抽取代码示例、关系说明和使用指引。
-- 输出必须严格符合给定 JSON schema。
+请只根据输入内容提取四类信息，并严格返回符合给定 JSON schema 的结果：
+- goals: 业务目标
+- rules: 关键规则
+- limits: 边界限制
+- prohibitions: 禁止项
 
-用户说明：
-{instruction}
-
-输入材料：
-{source_list}
-
-附加要求：
-- summary: 1 段简洁摘要
-- key_relationships: 提炼跨文件关系、调用链、依赖关系或关键模式
-- reference_units: 提炼最值得保留的代码片段说明、文档精华或参考单元
-- agent_guidance: 给下游模型/Agent 的使用建议或生成约束
+要求：
 - 不要编造事实
-- 提取不到时返回空字符串或空数组
-- 每项保持简短、可复用
-- {interaction_note}
+- 提取不到时返回空数组
+- 每个条目保持简短、可复用
+- 不要输出 schema 之外的字段
 
-输入内容：
-{bundled_content}
+源文档名：{source_name}
+
+原文：
+{content}
 """
-
-
-def _normalize_text(value: Any) -> str:
-    """清洗宿主模型返回的单段文本。"""
-
-    if not isinstance(value, str):
-        return ""
-    return " ".join(value.split()).strip()
 
 
 def _normalize_items(items: Any) -> list[str]:
@@ -138,7 +100,9 @@ def _normalize_items(items: Any) -> list[str]:
 
     normalized: list[str] = []
     for item in items:
-        cleaned = _normalize_text(item)
+        if not isinstance(item, str):
+            continue
+        cleaned = " ".join(item.split()).strip()
         if cleaned and cleaned not in normalized:
             normalized.append(cleaned)
     return normalized

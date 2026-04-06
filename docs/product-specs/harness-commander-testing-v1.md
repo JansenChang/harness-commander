@@ -18,13 +18,6 @@
 - L3：宿主模型契约测试
 - L4：本地 Claude 联调测试
 
-## 执行约束
-
-- 默认通过项目虚拟环境运行测试与验收，优先使用 `.venv/bin/pytest`、`.venv/bin/python`、`.venv/bin/harness`。
-- 不要假设系统 PATH 中存在 `python`、`pytest` 或 `harness`；如果直接调用系统命令，容易出现“命令不存在”导致的假失败。
-- 这条规则来自 2026-04-06 的一次真实错误：先后触发了 `python: command not found`、`No module named pytest` 和 `harness command not found in PATH`，根因都是没有走项目虚拟环境。
-- 验收测试如果需要调用 CLI，可显式把 `.venv/bin` 注入 PATH，或直接使用 `.venv/bin/harness`，避免依赖机器全局安装状态。
-
 ## 命令测试入口
 
 - `init`：`docs/product-specs/v1/commands/init/testing.md`
