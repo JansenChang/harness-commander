@@ -410,6 +410,49 @@ def test_init_command_falls_back_to_builtin_templates_when_package_resource_miss
     assert missing_template in warning.detail["reason"]
 
 
+def assert_distill_mapping_meta(
+    payload: dict[str, object],
+) -> tuple[dict[str, object], dict[str, list[dict[str, object]]], dict[str, object]]:
+    """断言 distill 来源映射元数据结构稳定。"""
+
+    meta = payload.get("meta")
+    assert isinstance(meta, dict)
+    extraction_report = meta.get("extraction_report")
+    section_sources = meta.get("section_sources")
+    source_mapping_coverage = meta.get("source_mapping_coverage")
+    assert isinstance(extraction_report, dict)
+    assert isinstance(section_sources, dict)
+    assert isinstance(source_mapping_coverage, dict)
+    assert "unresolved_sections" in extraction_report
+    assert "extracted_section_count" in extraction_report
+    assert "extraction_source" in extraction_report
+    assert "mapped_items" in source_mapping_coverage
+    assert "unmatched_items" in source_mapping_coverage
+    assert "total_items" in source_mapping_coverage
+    assert (
+        "mapped_ratio" in source_mapping_coverage
+        or "coverage_ratio" in source_mapping_coverage
+    )
+    for value in section_sources.values():
+        assert isinstance(value, list)
+        for item in value:
+            assert isinstance(item, dict)
+            assert isinstance(item.get("text"), str)
+            assert item.get("mapping_status") in {"mapped", "unmatched"}
+    return extraction_report, section_sources, source_mapping_coverage
+
+
+def flatten_section_sources(
+    section_sources: dict[str, list[dict[str, object]]],
+) -> list[dict[str, object]]:
+    """拍平 section_sources，便于统一断言。"""
+
+    flattened: list[dict[str, object]] = []
+    for items in section_sources.values():
+        flattened.extend(items)
+    return flattened
+
+
 def test_distill_marks_partial_extraction_as_warning(tmp_path: Path, capsys) -> None:
     """distill 缺少部分章节但仍可提炼时应返回 warning。"""
 
@@ -436,6 +479,16 @@ def test_distill_marks_partial_extraction_as_warning(tmp_path: Path, capsys) -> 
     assert payload["meta"]["extracted_section_count"] == 1
     assert payload["meta"]["distill_mode"] == "heuristic"
     assert payload["meta"]["extraction_source"] == "heuristic"
+    extraction_report, section_sources, source_mapping_coverage = assert_distill_mapping_meta(
+        payload
+    )
+    assert extraction_report["extracted_section_count"] == 1
+    assert source_mapping_coverage["total_items"] >= 1
+    assert source_mapping_coverage["mapped_items"] >= 1
+    assert any(
+        item.get("mapping_status") == "mapped"
+        for item in flatten_section_sources(section_sources)
+    )
 
 
 def test_distill_fails_when_extraction_is_insufficient(tmp_path: Path, capsys) -> None:
@@ -454,6 +507,9 @@ def test_distill_fails_when_extraction_is_insufficient(tmp_path: Path, capsys) -
     assert payload["warnings"][0]["code"] == "partial_distillation"
     assert payload["errors"][0]["code"] == "distillation_insufficient"
     assert payload["meta"]["extracted_section_count"] == 0
+    extraction_report, _, source_mapping_coverage = assert_distill_mapping_meta(payload)
+    assert extraction_report["extracted_section_count"] == 0
+    assert source_mapping_coverage["total_items"] == 0
 
 
 def test_distill_extracts_requirements_and_constraints(tmp_path: Path, capsys) -> None:
@@ -476,6 +532,14 @@ def test_distill_extracts_requirements_and_constraints(tmp_path: Path, capsys) -
     assert "- 用户管理" in content
     assert "- 使用 Python 3.10+" in content
     assert "- 不得写入明文密钥" in content
+    assert "来源映射" in content
+    extraction_report, section_sources, source_mapping_coverage = assert_distill_mapping_meta(
+        payload
+    )
+    assert extraction_report["extracted_section_count"] >= 3
+    assert source_mapping_coverage["mapped_items"] >= 3
+    assert source_mapping_coverage["mapped_items"] <= source_mapping_coverage["total_items"]
+    assert flatten_section_sources(section_sources)
 
 
 def test_distill_host_model_mode_uses_configured_provider_by_default(
@@ -520,11 +584,21 @@ def test_distill_host_model_mode_uses_configured_provider_by_default(
     assert payload["meta"]["provider_source"] == "default_provider"
     assert payload["meta"]["supported_providers"] == list(SUPPORTED_PROVIDERS)
     assert mocked_distill.call_args.kwargs["provider"] == "codex"
+    extraction_report, section_sources, source_mapping_coverage = assert_distill_mapping_meta(
+        payload
+    )
+    assert extraction_report["extraction_source"] == "host-model"
+    assert source_mapping_coverage["total_items"] >= 1
+    assert any(
+        item.get("mapping_status") == "unmatched"
+        for item in flatten_section_sources(section_sources)
+    )
     target_path = Path(payload["meta"]["target_path"])
     content = target_path.read_text(encoding="utf-8")
     assert "- 提升新用户完成率" in content
     assert "- 必须引导用户完成邮箱验证" in content
     assert "- 不得跳过风控校验" in content
+    assert "来源映射" in content
 
 
 def test_distill_auto_mode_falls_back_to_heuristic_when_host_model_fails(
@@ -564,6 +638,20 @@ def test_distill_auto_mode_falls_back_to_heuristic_when_host_model_fails(
     assert payload["meta"]["fallback_from"] == "host-model"
     warning_codes = [warning["code"] for warning in payload["warnings"]]
     assert "distill_fallback_to_heuristic" in warning_codes
+    extraction_report, section_sources, source_mapping_coverage = assert_distill_mapping_meta(
+        payload
+    )
+    assert extraction_report["extraction_source"] == "heuristic"
+    assert source_mapping_coverage["total_items"] >= 1
+    flattened = flatten_section_sources(section_sources)
+    assert flattened
+    assert all(
+        item.get("mapping_status") in {"mapped", "unmatched"} for item in flattened
+    )
+    assert (
+        any(item.get("mapping_status") == "unmatched" for item in flattened)
+        or extraction_report["unresolved_sections"]
+    )
 
 
 def test_distill_provider_override_takes_precedence_over_config(

@@ -99,3 +99,16 @@
 - 关联测试：`tests/test_cli.py`、`tests/test_integration.py`
 - 关联文档：`docs/product-specs/v2/commands/check/protocol.md`、`docs/exec-plans/active/harness-commander-v2/check-governance-entry.md`
 - 关闭条件：`check` 的健康度模型按规则域分层，并与前置门 / 自动消费协议正式定版。
+
+### [open] distill Phase 1 的 host-model 来源映射允许 unmatched 偏高
+
+- 日期：2026-04-07
+- 类型：`temporary-fix`
+- 范围：`distill` V2 Phase 1、来源映射结果协议
+- 现象：`distill` 已输出 `extraction_report`、`section_sources`、`source_mapping_coverage`，但 host-model 路径下因输出可能被重述，`unmatched` 比例可能较高。
+- 根因：本轮优先目标是先提供稳定的来源可追踪协议与 `unmatched` 语义，而不是一次性完成 chunk 级对齐、重述回链或增量映射。
+- 当前处理：已明确无法可靠定位时必须标记 `unmatched`，禁止伪造行号；同时保持 fallback 与主结果语义不回归。
+- 防复发：后续若消费 `section_sources` 做自动判断，必须结合 `mapping_status` 和 `source_mapping_coverage`，不能把 host-model unmatched 直接当作提炼失败。
+- 关联测试：`tests/test_cli.py`、`tests/test_integration.py`
+- 关联文档：`docs/product-specs/v2/commands/distill/protocol.md`、`docs/exec-plans/active/harness-commander-v2/distill-source-mapping.md`
+- 关闭条件：来源映射扩展到更稳定的 chunk / 引用回链机制，并为 host-model 路径定义可接受覆盖阈值。

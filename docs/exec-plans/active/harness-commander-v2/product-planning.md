@@ -121,9 +121,10 @@
 - 已启动：
   - `run-agents` 命令级执行计划：`run-agents-stage-contracts.md`
   - `check` 命令级执行计划：`check-governance-entry.md`
+  - `distill` 命令级执行计划：`distill-source-mapping.md`
 - 当前选择：
-  - 先落 `run-agents` 阶段合同和 `check` 治理入口
-  - 继续保持 deterministic baseline，再规划 `distill` 深化
+  - 先落 `run-agents` 阶段合同、`check` 治理入口、`distill` 来源映射
+  - 继续保持 deterministic baseline，再规划宿主模型默认主路径
 
 ## References
 

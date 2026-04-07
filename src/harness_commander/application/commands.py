@@ -535,6 +535,8 @@ def run_distill(
     errors: list[CommandMessage] = []
     unresolved_sections = extraction_report["unresolved_sections"]
     extracted_section_count = extraction_report["extracted_section_count"]
+    section_sources = extraction_report["section_sources"]
+    source_mapping_coverage = extraction_report["source_mapping_coverage"]
 
     if fallback_from:
         warnings.append(
@@ -609,6 +611,9 @@ def run_distill(
             "source_type": _classify_distill_source(source_file),
             "extracted_section_count": extracted_section_count,
             "unresolved_sections": unresolved_sections,
+            "section_sources": section_sources,
+            "source_mapping_coverage": source_mapping_coverage,
+            "extraction_report": extraction_report,
             "distill_mode": selected_mode,
             "extraction_source": extraction_source,
             "fallback_from": fallback_from,
@@ -681,12 +686,19 @@ def _run_distill_extraction(
                 prohibitions=structured["prohibitions"],
                 source_name=source_name,
                 source_meta={"host_model_used": True},
+                source_content=content,
+                mapping_strategy="host-model",
             )
             extraction_report.update(
                 {
                     "extraction_source": "host-model",
                     "fallback_from": None,
                     "fallback_reason": None,
+                    "fallback": {
+                        "applied": False,
+                        "from": None,
+                        "reason": None,
+                    },
                     "model_provider": model_provider,
                     "model_name": model_name,
                 }
@@ -699,6 +711,11 @@ def _run_distill_extraction(
             "extraction_source": extraction_source,
             "fallback_from": fallback_from,
             "fallback_reason": fallback_reason,
+            "fallback": {
+                "applied": fallback_from is not None,
+                "from": fallback_from,
+                "reason": fallback_reason,
+            },
             "model_provider": model_provider,
             "model_name": model_name,
         }
@@ -735,6 +752,8 @@ def extract_key_information(content: str, source_name: str) -> tuple[str, dict[s
         prohibitions=prohibitions,
         source_name=source_name,
         source_meta={"提取行数": len(lines)},
+        source_content=content,
+        mapping_strategy="heuristic",
     )
 
 
@@ -746,6 +765,8 @@ def _render_distill_from_sections(
     prohibitions: list[str],
     source_name: str,
     source_meta: dict[str, Any] | None = None,
+    source_content: str | None = None,
+    mapping_strategy: str = "heuristic",
 ) -> tuple[str, dict[str, Any]]:
     """把四类结构化信息渲染为标准 distill 输出。"""
 
@@ -757,6 +778,11 @@ def _render_distill_from_sections(
     }
     unresolved_sections = [name for name, items in sections.items() if not items]
     extracted_section_count = sum(1 for items in sections.values() if items)
+    section_sources, source_mapping_coverage = _build_distill_source_mapping(
+        sections=sections,
+        source_content=source_content,
+        mapping_strategy=mapping_strategy,
+    )
 
     distilled_lines = [
         f"# {source_name} 参考材料",
@@ -785,9 +811,39 @@ def _render_distill_from_sections(
         for key, value in source_meta.items():
             distilled_lines.append(f"- {key}: {value}")
 
+    distilled_lines.extend(
+        [
+            "",
+            "## 来源映射",
+            f"- 映射策略：{source_mapping_coverage['mapping_strategy']}",
+            f"- 映射覆盖：{source_mapping_coverage['mapped_items']}/{source_mapping_coverage['total_items']}",
+        ]
+    )
+    for section_name, entries in section_sources.items():
+        distilled_lines.extend(["", f"### {section_name}"])
+        if not entries:
+            distilled_lines.append("- 无提炼条目")
+            continue
+        for entry in entries:
+            item = str(entry["text"])
+            if entry["mapping_status"] == "mapped":
+                distilled_lines.append(f"- {item} @ line {entry['line']}")
+            else:
+                distilled_lines.append(f"- {item} @ unmatched")
+
     return "\n".join(distilled_lines), {
+        "sections": {
+            "goals": len(goals),
+            "rules": len(rules),
+            "limits": len(limits),
+            "prohibitions": len(prohibitions),
+        },
         "unresolved_sections": unresolved_sections,
         "extracted_section_count": extracted_section_count,
+        "section_item_counts": {name: len(items) for name, items in sections.items()},
+        "section_sources": section_sources,
+        "source_mapping_coverage": source_mapping_coverage,
+        "mapping_summary": source_mapping_coverage,
     }
 
 
@@ -863,6 +919,89 @@ def _deduplicate_items(items: list[str]) -> list[str]:
         seen.add(item)
         deduped.append(item)
     return deduped
+
+
+def _build_distill_source_mapping(
+    *,
+    sections: dict[str, list[str]],
+    source_content: str | None,
+    mapping_strategy: str,
+) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Any]]:
+    """为提炼条目构造来源映射和覆盖统计。"""
+
+    source_lines = source_content.splitlines() if source_content else []
+    mapped_items = 0
+    total_items = 0
+    section_sources: dict[str, list[dict[str, Any]]] = {}
+
+    for section_name, items in sections.items():
+        entries: list[dict[str, Any]] = []
+        for item in items:
+            total_items += 1
+            source_match = _locate_distill_source_line(item=item, source_lines=source_lines)
+            if source_match is None:
+                entries.append(
+                    {
+                        "text": item,
+                        "mapping_status": "unmatched",
+                        "line": None,
+                        "snippet": None,
+                        "mapping_strategy": mapping_strategy,
+                    }
+                )
+                continue
+            mapped_items += 1
+            entries.append(
+                {
+                    "text": item,
+                    "mapping_status": "mapped",
+                    "line": source_match["line"],
+                    "snippet": source_match["snippet"],
+                    "mapping_strategy": mapping_strategy,
+                }
+            )
+        section_sources[section_name] = entries
+
+    unmatched_items = total_items - mapped_items
+    source_mapping_coverage = {
+        "mapping_strategy": mapping_strategy,
+        "mapped_items": mapped_items,
+        "total_items": total_items,
+        "unmatched_items": unmatched_items,
+        "mapped_ratio": round(mapped_items / total_items, 4) if total_items else 0.0,
+        "coverage_ratio": round(mapped_items / total_items, 4) if total_items else 0.0,
+    }
+    return section_sources, source_mapping_coverage
+
+
+def _locate_distill_source_line(
+    *, item: str, source_lines: list[str]
+) -> dict[str, Any] | None:
+    """定位提炼条目在原文中的近似位置。"""
+
+    normalized_item = _normalize_distill_match_text(item)
+    if not normalized_item:
+        return None
+
+    for index, raw_line in enumerate(source_lines, start=1):
+        stripped = raw_line.strip()
+        if not stripped:
+            continue
+        cleaned = _clean_distill_line(stripped)
+        normalized_line = _normalize_distill_match_text(cleaned)
+        if not normalized_line:
+            continue
+        if normalized_item in normalized_line or normalized_line in normalized_item:
+            return {"line": index, "snippet": cleaned[:120]}
+    return None
+
+
+def _normalize_distill_match_text(text: str) -> str:
+    """归一化文本以做近似匹配。"""
+
+    lowered = text.lower()
+    compact = re.sub(r"\s+", "", lowered)
+    return re.sub(r"[^\w\u4e00-\u9fff]", "", compact)
 
 
 

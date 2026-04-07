@@ -1,70 +1,56 @@
-# V2 `distill` 产品草案
+# V2 `distill` 产品定义
 
 ## 当前状态
 
-- draft
+- active（V2 第一轮实现中）
 
-## V2 决策
+## V2 定位
 
 - `distill` 是 V2 第一批必须完成的宿主模型能力之一。
-- 当前阶段先保持默认不依赖宿主模型。
-- 后续阶段切到“默认优先宿主模型，失败 fallback”。
-- `distill` 的产品定位是：为下游大模型读取而准备轻量、可复用、可控的参考材料。
+- 当前切片目标是把它从“一次性压缩工具”推进到“可追踪知识蒸馏入口”。
+- 本轮继续保持 deterministic baseline，不切宿主模型默认主路径。
 
-## V1 现状
+## 当前实现切片（Phase 1）
 
-- 已支持 `heuristic`、`host-model`、`auto`
-- 已能提炼四类核心信息：`goals`、`rules`、`limits`、`prohibitions`
-- 已能生成 `docs/references/*-llms.txt`
+- 保持现有模式：`heuristic` / `host-model` / `auto`。
+- 保持四类提炼模型：`goals` / `rules` / `limits` / `prohibitions`。
+- 在结果协议中新增：
+  - `extraction_report`
+  - `section_sources`
+  - `source_mapping_coverage`
+- 在 `*-llms.txt` 中追加最小来源映射区块，不重排主体内容。
 
-## V1 缺陷
+## deterministic baseline（本轮约束）
 
-- `distill` 更像“一次性压缩工具”，还不是知识沉淀系统。
-- 提炼结果和源材料之间缺少来源映射，后续很难追查“这条规则从哪来”。
-- 对代码目录、长设计文档、跨文件材料的处理还比较粗。
-- 宿主模型的结构化合同虽然可用，但还没有扩展成统一的 reference / schema 管理机制。
+- 宿主模型不决定最终状态、目标路径和 fallback 语义。
+- 来源映射优先“可解释、可复核”，不追求一次性完整覆盖。
+- 条目无法可靠定位时必须标记 `unmatched`，不能伪造来源位置。
+- `health` 或评分类字段不是本轮目标，不替代原有 warning / failure 语义。
 
-## V2 要解决的问题
+## 本轮要解决的问题
 
-- 把 `distill` 从一次性摘要升级成“项目知识蒸馏入口”。
-- 支持来源可追踪、增量更新、不同输入类型的分层提炼。
-- 定义什么材料应该变成 `*-llms.txt`，什么材料应该进入 `design-docs/` 或 `product-specs/`。
-- 减少“压缩后更短了，但更难验证正确性”的风险。
-- 把宿主模型增强从“可选实验能力”提升为后续阶段默认主路径之一。
+- 让提炼结果能回答“条目从哪里来”。
+- 让 unresolved section 与 fallback 事实具备统一报告结构。
+- 让下游 agent 能消费提炼结果和来源映射，而不只读纯文本摘要。
 
-## 输入分流方向
+## 与 active exec plan 对齐
 
-- 代码与代码目录：
-  - 优先产出 `*-llms.txt`
-- 长参考材料、外部资料、给下游模型消费的压缩材料：
-  - 优先产出 `*-llms.txt`
-- 正式设计决策：
-  - 继续沉淀到 `design-docs/`
-- 正式产品、协议、测试、验收规则：
-  - 继续沉淀到 `product-specs/`
+- 当前执行计划：`docs/exec-plans/active/harness-commander-v2/distill-source-mapping.md`
+- 对齐 ULW：
+  - ULW 1：锁定 extraction report 协议
+  - ULW 2：四类 section 来源映射
+  - ULW 3：保持 fallback 与兼容语义
+  - ULW 4：为增量与 schema 扩展留扩展位
 
-## V2 继承的边界
+## 当前非目标
 
-- Harness 继续控制目标路径、结果字段、fallback 和 warning/error 语义。
-- 宿主模型继续只负责结构化提炼，不负责最终状态和产物定义。
-- 默认优先宿主模型后，也不能移除 heuristic fallback。
-
-## 当前建议
-
-- 不是所有输入都默认优先宿主模型。
-- 最优规划是：
-  - 非结构化长文档 / 外部参考：后续默认优先宿主模型
-  - 已结构化治理文档：默认仍以 Harness 规则路径为主
-  - 代码目录：可做宿主模型增强，但不能完全放弃可解释的本地提炼路径
-
-## V2 可能推翻的边界
-
-- 四类信息模型可能不再足以覆盖所有输入类型。
-- `distill` 的输出不一定都应是单文件 `*-llms.txt`。
+- 不实现增量 distill。
+- 不引入跨文件聚合提炼。
+- 不改变四类 section 基础模型。
+- 不切换到宿主模型默认优先主路径。
 
 ## 当前开放问题
 
-- 是否需要增加引用来源 / 证据行号 / chunk 映射？
-- 是否要支持“只更新变化部分”的增量 distill？
-- 如何区分“给 AI 读的 reference”和“给人长期维护的 design/product 文档”？
-- 默认优先宿主模型时，哪些输入类型必须继续保留 deterministic-first 策略？
+- 来源映射后续是否需要升级到 chunk 级而不只是行号/位置级？
+- `next` 阶段是否要把 `section_sources` 输出标准化为可重放任务包？
+- 增量 distill 时如何处理历史映射失效和冲突合并？

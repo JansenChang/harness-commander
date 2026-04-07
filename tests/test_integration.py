@@ -104,6 +104,49 @@ def create_run_agents_inputs(
     return spec_file, plan_file
 
 
+def assert_distill_mapping_meta(
+    payload: dict[str, object],
+) -> tuple[dict[str, object], dict[str, list[dict[str, object]]], dict[str, object]]:
+    """断言 distill 来源映射元数据结构稳定。"""
+
+    meta = payload.get("meta")
+    assert isinstance(meta, dict)
+    extraction_report = meta.get("extraction_report")
+    section_sources = meta.get("section_sources")
+    source_mapping_coverage = meta.get("source_mapping_coverage")
+    assert isinstance(extraction_report, dict)
+    assert isinstance(section_sources, dict)
+    assert isinstance(source_mapping_coverage, dict)
+    assert "unresolved_sections" in extraction_report
+    assert "extracted_section_count" in extraction_report
+    assert "extraction_source" in extraction_report
+    assert "mapped_items" in source_mapping_coverage
+    assert "unmatched_items" in source_mapping_coverage
+    assert "total_items" in source_mapping_coverage
+    assert (
+        "mapped_ratio" in source_mapping_coverage
+        or "coverage_ratio" in source_mapping_coverage
+    )
+    for value in section_sources.values():
+        assert isinstance(value, list)
+        for item in value:
+            assert isinstance(item, dict)
+            assert isinstance(item.get("text"), str)
+            assert item.get("mapping_status") in {"mapped", "unmatched"}
+    return extraction_report, section_sources, source_mapping_coverage
+
+
+def flatten_section_sources(
+    section_sources: dict[str, list[dict[str, object]]],
+) -> list[dict[str, object]]:
+    """拍平 section_sources，便于统一断言。"""
+
+    flattened: list[dict[str, object]] = []
+    for items in section_sources.values():
+        flattened.extend(items)
+    return flattened
+
+
 def assert_stage_contracts_shape(
     payload: dict[str, object], *, expected_stages: list[str]
 ) -> list[dict[str, object]]:
@@ -167,6 +210,49 @@ def stage_uses_fallback(stage_contract: dict[str, object]) -> bool:
     fallback = stage_contract.get("fallback")
     assert isinstance(fallback, dict)
     return fallback.get("applied") is True
+
+
+def assert_distill_mapping_meta(
+    payload: dict[str, object],
+) -> tuple[dict[str, object], dict[str, list[dict[str, object]]], dict[str, object]]:
+    """断言 distill 来源映射元数据结构稳定。"""
+
+    meta = payload.get("meta")
+    assert isinstance(meta, dict)
+    extraction_report = meta.get("extraction_report")
+    section_sources = meta.get("section_sources")
+    source_mapping_coverage = meta.get("source_mapping_coverage")
+    assert isinstance(extraction_report, dict)
+    assert isinstance(section_sources, dict)
+    assert isinstance(source_mapping_coverage, dict)
+    assert "unresolved_sections" in extraction_report
+    assert "extracted_section_count" in extraction_report
+    assert "extraction_source" in extraction_report
+    assert "mapped_items" in source_mapping_coverage
+    assert "unmatched_items" in source_mapping_coverage
+    assert "total_items" in source_mapping_coverage
+    assert (
+        "mapped_ratio" in source_mapping_coverage
+        or "coverage_ratio" in source_mapping_coverage
+    )
+    for items in section_sources.values():
+        assert isinstance(items, list)
+        for item in items:
+            assert isinstance(item, dict)
+            assert isinstance(item.get("text"), str)
+            assert item.get("mapping_status") in {"mapped", "unmatched"}
+    return extraction_report, section_sources, source_mapping_coverage
+
+
+def flatten_distill_sources(
+    section_sources: dict[str, list[dict[str, object]]],
+) -> list[dict[str, object]]:
+    """拍平 section_sources，便于统一断言。"""
+
+    flattened: list[dict[str, object]] = []
+    for items in section_sources.values():
+        flattened.extend(items)
+    return flattened
 
 
 
@@ -283,6 +369,20 @@ def test_command_chaining(tmp_path: Path, capsys) -> None:
     distill_result = json.loads(captured.out.strip())
     assert distill_result["command"] == "distill"
     assert distill_result["artifacts"]
+    extraction_report, _, source_mapping_coverage = assert_distill_mapping_meta(
+        distill_result
+    )
+    assert extraction_report["extracted_section_count"] >= 1
+    assert source_mapping_coverage["total_items"] >= 1
+    output_path = Path(distill_result["meta"]["target_path"])
+    assert "来源映射" in output_path.read_text(encoding="utf-8")
+    _, section_sources, source_mapping_coverage = assert_distill_mapping_meta(
+        distill_result
+    )
+    assert source_mapping_coverage["mapped_items"] >= 1
+    target_path = Path(distill_result["meta"]["target_path"])
+    assert "来源映射" in target_path.read_text(encoding="utf-8")
+    assert flatten_distill_sources(section_sources)
 
     sync_exit_code = main(["-p", str(tmp_path), "--json", "sync"])
     sync_captured = capsys.readouterr()
@@ -352,6 +452,24 @@ def test_install_provider_then_host_model_commands_use_config(tmp_path: Path, ca
     assert payload["meta"]["provider"] == "claude"
     assert payload["meta"]["provider_source"] == "default_provider"
     assert payload["meta"]["model_provider"] == "claude-cli"
+    extraction_report, section_sources, source_mapping_coverage = assert_distill_mapping_meta(
+        payload
+    )
+    assert extraction_report["extraction_source"] == "host-model"
+    assert source_mapping_coverage["total_items"] >= 1
+    assert any(
+        item.get("mapping_status") == "unmatched"
+        for item in flatten_section_sources(section_sources)
+    )
+    extraction_report, section_sources, source_mapping_coverage = assert_distill_mapping_meta(
+        payload
+    )
+    assert extraction_report["extraction_source"] == "host-model"
+    assert source_mapping_coverage["total_items"] >= 1
+    assert any(
+        item.get("mapping_status") == "unmatched"
+        for item in flatten_distill_sources(section_sources)
+    )
 
 
 def test_host_model_distill_uses_configured_provider_integration(
@@ -394,6 +512,18 @@ def test_host_model_distill_uses_configured_provider_integration(
     assert payload["meta"]["provider"] == "codex"
     assert payload["meta"]["provider_source"] == "default_provider"
     assert payload["meta"]["model_provider"] == "codex-cli"
+    extraction_report, _, source_mapping_coverage = assert_distill_mapping_meta(payload)
+    assert extraction_report["extraction_source"] == "host-model"
+    assert source_mapping_coverage["total_items"] >= 1
+    extraction_report, section_sources, source_mapping_coverage = assert_distill_mapping_meta(
+        payload
+    )
+    assert extraction_report["extraction_source"] == "host-model"
+    assert source_mapping_coverage["total_items"] >= 1
+    assert any(
+        item.get("mapping_status") == "unmatched"
+        for item in flatten_distill_sources(section_sources)
+    )
 
 
 
@@ -437,6 +567,30 @@ def test_host_model_distill_json_contract(tmp_path: Path, capsys) -> None:
     assert any(
         warning["code"] == "distill_fallback_to_heuristic"
         for warning in payload["warnings"]
+    )
+    extraction_report, section_sources, source_mapping_coverage = assert_distill_mapping_meta(
+        payload
+    )
+    assert extraction_report["extraction_source"] == "heuristic"
+    assert source_mapping_coverage["total_items"] >= 1
+    flattened = flatten_section_sources(section_sources)
+    assert flattened
+    assert all(
+        item.get("mapping_status") in {"mapped", "unmatched"} for item in flattened
+    )
+    extraction_report, section_sources, source_mapping_coverage = assert_distill_mapping_meta(
+        payload
+    )
+    assert extraction_report["extraction_source"] == "heuristic"
+    flattened = flatten_distill_sources(section_sources)
+    assert flattened
+    assert source_mapping_coverage["total_items"] >= 1
+    assert all(
+        item.get("mapping_status") in {"mapped", "unmatched"} for item in flattened
+    )
+    assert (
+        any(item.get("mapping_status") == "unmatched" for item in flattened)
+        or extraction_report["unresolved_sections"]
     )
 
 

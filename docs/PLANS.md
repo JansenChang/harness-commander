@@ -22,7 +22,7 @@
 ### 当前阶段
 
 - Harness-Commander V1 的 CLI 主命令集已经落地，本轮执行层硬化已归档完成。
-- 项目当前处于“V2 最小闭环命令级规划 + 第二轮实现”阶段。
+- 项目当前处于“V2 最小闭环命令级规划 + 第三轮实现”阶段。
 - 当前 active 计划已重新开启，入口位于 `docs/exec-plans/active/harness-commander-v2/`。
 
 ### 命令状态快照
@@ -41,12 +41,12 @@
 
 ### 当前重点
 
-- 已完成 `run-agents` Phase 1 阶段合同基线，当前继续推进 `check` 的治理入口结果协议。
+- 已完成 `run-agents` Phase 1 阶段合同基线和 `check` 治理入口基线，当前继续推进 `distill` 的来源映射结果协议。
 - 保持默认不依赖宿主模型，先收敛 deterministic baseline，再为后续宿主模型主路径留出结构化边界。
-- 在不扩大扫描面和 runtime 范围的前提下，优先补齐：
-  - `check` 的 `health_score`、`governance_entry`、`next_actions`
-  - `check` 对应 CLI / integration 覆盖
-  - V2 `check` 产品、协议、测试、验收文档
+- 在不扩大 schema 和增量逻辑范围的前提下，优先补齐：
+  - `distill` 的 `extraction_report`、`section_sources`、`source_mapping_coverage`
+  - `distill` 对应 CLI / integration 覆盖
+  - V2 `distill` 产品、协议、测试、验收文档
 
 ### 当前阻塞与风险
 
@@ -62,4 +62,5 @@
 - 当前命令级执行计划：
   - `docs/exec-plans/active/harness-commander-v2/run-agents-stage-contracts.md`
   - `docs/exec-plans/active/harness-commander-v2/check-governance-entry.md`
+  - `docs/exec-plans/active/harness-commander-v2/distill-source-mapping.md`
 - 已归档入口：`docs/exec-plans/completed/2026-04-07-harness-commander-v1-exec-archive.md`
