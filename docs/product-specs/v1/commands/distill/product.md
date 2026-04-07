@@ -15,6 +15,8 @@
 
 - 默认模式为 `heuristic`。
 - 支持可选 `host-model` 与 `auto` 模式。
+- `distill` 在 `host-model` / `auto` 模式下默认读取项目已安装/已配置的 provider。
+- `--provider` 仅作为当前命令的临时 override，不再是主路径。
 - `distill` 是当前唯一已实现可选宿主模型增强的命令。
 
 ## 宿主模型边界

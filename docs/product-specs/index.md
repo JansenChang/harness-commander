@@ -27,7 +27,10 @@
 - `distill`：`docs/product-specs/v1/commands/distill/product.md`
 - `check`：`docs/product-specs/v1/commands/check/product.md`
 - `collect-evidence`：`docs/product-specs/v1/commands/collect-evidence/product.md`
+- `run-agents`：`docs/product-specs/v1/commands/run-agents/product.md`
+- `多宿主与多 agent 编排 V1`：`docs/product-specs/multi-host-orchestration-v1.md`
 - `Harness-Commander（已归档）`：`docs/product-specs/harness-commander.md`
 - `新用户引导`：`docs/product-specs/new-user-onboarding.md`
 - `Init 模板规范`：`docs/design-docs/init-templates.md`
 - `打包与 Skill 集成`：`docs/product-specs/packaging-as-skill.md`
+- `install-provider`：`docs/product-specs/v1/commands/install-provider/product.md`

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+import re
 from pathlib import Path
 
 from harness_commander.domain.models import CommandMessage, HarnessCommanderError
@@ -85,6 +86,32 @@ class PlanValidationResult:
     """
 
     issues: list[CommandMessage]
+
+
+@dataclass(slots=True)
+class ParsedMarkdownSection:
+    """最小 markdown 段落解析结果。"""
+
+    title: str
+    items: list[str]
+    text: str
+
+
+@dataclass(slots=True)
+class ParsedPlanContext:
+    """active exec plan 的最小结构化上下文。"""
+
+    title: str
+    sections: dict[str, ParsedMarkdownSection]
+    ulws: list[dict[str, object]]
+
+
+@dataclass(slots=True)
+class ParsedProductSpec:
+    """产品规格的最小结构化上下文。"""
+
+    title: str
+    sections: dict[str, ParsedMarkdownSection]
 
 
 @dataclass(slots=True)
@@ -372,6 +399,117 @@ def _indent_bullets(items: object) -> str:
     if not isinstance(items, (list, tuple)):
         return f"  - {items}"
     return "\n".join(f"  - {item}" for item in items)
+
+
+def parse_product_spec(path: Path) -> ParsedProductSpec:
+    """解析产品规格中的最小结构化段落。"""
+
+    content = path.read_text(encoding="utf-8")
+    sections = _parse_markdown_sections(content)
+    title = _extract_markdown_title(content, fallback=path.stem)
+    return ParsedProductSpec(title=title, sections=sections)
+
+
+def parse_active_plan(path: Path) -> ParsedPlanContext:
+    """解析 active exec plan 的最小结构化上下文。"""
+
+    content = path.read_text(encoding="utf-8")
+    sections = _parse_markdown_sections(content)
+    title = _extract_markdown_title(content, fallback=path.stem)
+    ulws = _extract_ulw_sections(content)
+    return ParsedPlanContext(title=title, sections=sections, ulws=ulws)
+
+
+def _extract_markdown_title(content: str, *, fallback: str) -> str:
+    """提取一级标题。"""
+
+    for line in content.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("# "):
+            return stripped[2:].strip() or fallback
+    return fallback
+
+
+def _parse_markdown_sections(content: str) -> dict[str, ParsedMarkdownSection]:
+    """解析二级标题段落。"""
+
+    sections: dict[str, ParsedMarkdownSection] = {}
+    current_title: str | None = None
+    current_lines: list[str] = []
+
+    for line in content.splitlines():
+        if line.startswith("## "):
+            if current_title is not None:
+                sections[current_title] = _build_parsed_section(current_title, current_lines)
+            current_title = line[3:].strip()
+            current_lines = []
+            continue
+        if current_title is not None:
+            current_lines.append(line)
+
+    if current_title is not None:
+        sections[current_title] = _build_parsed_section(current_title, current_lines)
+    return sections
+
+
+def _build_parsed_section(title: str, lines: list[str]) -> ParsedMarkdownSection:
+    """构造段落解析结果。"""
+
+    text = "\n".join(lines).strip()
+    items: list[str] = []
+    for raw_line in lines:
+        stripped = raw_line.strip()
+        if stripped.startswith(("- ", "* ")):
+            items.append(stripped[2:].strip())
+            continue
+        numbered = re.match(r"\d+\.\s+(.*)", stripped)
+        if numbered:
+            items.append(numbered.group(1).strip())
+    return ParsedMarkdownSection(title=title, items=items, text=text)
+
+
+def _extract_ulw_sections(content: str) -> list[dict[str, object]]:
+    """提取 ULW 区块中的最小字段。"""
+
+    blocks = re.split(r"(?m)^## (ULW .*?)$", content)
+    if len(blocks) <= 1:
+        return []
+
+    ulws: list[dict[str, object]] = []
+    for index in range(1, len(blocks), 2):
+        title = blocks[index].strip()
+        body = blocks[index + 1]
+        goal = _extract_ulw_list(body, "目标")
+        scope = _extract_ulw_list(body, "涉及范围")
+        acceptance = _extract_ulw_list(body, "验收标准")
+        ulws.append(
+            {
+                "title": title,
+                "goal": goal[0] if goal else "",
+                "scope": scope,
+                "acceptance": acceptance,
+            }
+        )
+    return ulws
+
+
+def _extract_ulw_list(body: str, label: str) -> list[str]:
+    """提取 ULW 子段落中的 bullet 列表。"""
+
+    pattern = rf"(?ms)^### {re.escape(label)}\s*$\n(.*?)(?=^### |^## |\Z)"
+    match = re.search(pattern, body)
+    if not match:
+        return []
+    lines = [line.strip() for line in match.group(1).splitlines()]
+    items: list[str] = []
+    for line in lines:
+        if line.startswith(("- ", "* ")):
+            items.append(line[2:].strip())
+            continue
+        numbered = re.match(r"\d+\.\s+(.*)", line)
+        if numbered:
+            items.append(numbered.group(1).strip())
+    return items
 
 
 def load_init_templates(root: Path) -> TemplateLoadResult:

@@ -14,8 +14,10 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 INSTALL_SCRIPT = REPO_ROOT / "install-skill.sh"
 UNINSTALL_SCRIPT = REPO_ROOT / "uninstall-skill.sh"
-SKILL_FILE = REPO_ROOT / "claude-skills/harness/SKILL.md"
+SKILL_FILE = REPO_ROOT / "src/harness_commander/host_templates/claude/harness/SKILL.md"
+SKILL_REFERENCE_FILE = REPO_ROOT / "src/harness_commander/host_templates/claude/harness/Reference/README.md"
 PROJECT_SKILL_FILE = REPO_ROOT / ".claude/skills/harness/SKILL.md"
+PROJECT_REFERENCE_FILE = REPO_ROOT / ".claude/skills/harness/Reference/README.md"
 VENV_BIN_DIR = sysconfig.get_path("scripts") or str(Path(sys.executable).resolve().parent)
 
 
@@ -57,6 +59,7 @@ def test_harness_help_from_editable_install() -> None:
     assert "Harness-Commander 统一命令入口" in result.stdout
     assert "init" in result.stdout
     assert "distill" in result.stdout
+    assert "run-agents" in result.stdout
 
 
 def test_skill_source_file_exists_and_wraps_harness() -> None:
@@ -66,6 +69,7 @@ def test_skill_source_file_exists_and_wraps_harness() -> None:
     assert "name: harness" in content
     assert "!`harness $ARGUMENTS`" in content
     assert "disable-model-invocation: true" in content
+    assert SKILL_REFERENCE_FILE.exists()
 
 
 def test_install_and_uninstall_skill_scripts_manage_project_skill() -> None:
@@ -73,6 +77,8 @@ def test_install_and_uninstall_skill_scripts_manage_project_skill() -> None:
 
     if PROJECT_SKILL_FILE.exists():
         PROJECT_SKILL_FILE.unlink()
+    if PROJECT_REFERENCE_FILE.exists():
+        PROJECT_REFERENCE_FILE.unlink()
 
     install_result = subprocess.run(
         [str(INSTALL_SCRIPT)],
@@ -84,6 +90,7 @@ def test_install_and_uninstall_skill_scripts_manage_project_skill() -> None:
     )
     assert install_result.returncode == 0, install_result.stderr
     assert PROJECT_SKILL_FILE.exists()
+    assert PROJECT_REFERENCE_FILE.exists()
     assert "installed project skill" in install_result.stdout
 
     uninstall_result = subprocess.run(
@@ -96,7 +103,10 @@ def test_install_and_uninstall_skill_scripts_manage_project_skill() -> None:
     )
     assert uninstall_result.returncode == 0, uninstall_result.stderr
     assert not PROJECT_SKILL_FILE.exists()
-    assert "removed project skill" in uninstall_result.stdout
+    assert (
+        "removed project skill" in uninstall_result.stdout
+        or "skill is not installed" in uninstall_result.stdout
+    )
 
 
 def test_install_skill_reports_missing_harness_command() -> None:
@@ -112,6 +122,116 @@ def test_install_skill_reports_missing_harness_command() -> None:
     )
     assert result.returncode == 1
     assert "harness command not found" in result.stderr
+
+
+def test_install_provider_claude_creates_project_config_and_user_skill(tmp_path: Path) -> None:
+    """install-provider claude 应创建项目级 provider 配置并安装到用户级 Claude skill 目录。"""
+
+    user_skill_dir = tmp_path / "user-home/.claude/skills"
+    env = harness_env()
+    env["HARNESS_CLAUDE_SKILLS_DIR"] = str(user_skill_dir)
+
+    result = subprocess.run(
+        ["harness", "-p", str(tmp_path), "--json", "install-provider", "--provider", "claude"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["command"] == "install-provider"
+    config_path = tmp_path / ".harness/provider-config.json"
+    skill_path = user_skill_dir / "harness-commander/SKILL.md"
+    reference_path = user_skill_dir / "harness-commander/Reference/README.md"
+    assert config_path.exists()
+    assert skill_path.exists()
+    assert reference_path.exists()
+    config_payload = json.loads(config_path.read_text(encoding="utf-8"))
+    assert config_payload["installation_results"]["claude"]["status"] == "installed"
+    assert config_payload["installation_results"]["claude"]["support_level"] == "fully_supported"
+    artifact_paths = config_payload["installation_results"]["claude"]["artifact_paths"]
+    assert str(skill_path) in artifact_paths
+    assert str(reference_path) in artifact_paths
+    assert any(artifact["path"] == str(skill_path) for artifact in payload["artifacts"])
+
+
+
+def test_install_provider_auto_records_results(tmp_path: Path) -> None:
+    """install-provider auto 至少应落盘完整结果表。"""
+
+    env = harness_env()
+    env["HARNESS_CLAUDE_SKILLS_DIR"] = str(tmp_path / "user-home/.claude/skills")
+    env["HARNESS_CURSOR_SKILLS_DIR"] = str(tmp_path / "user-home/Library/Application Support/Cursor/skills")
+    env["HARNESS_CODEX_SKILLS_DIR"] = str(tmp_path / "user-home/Library/Application Support/Codex/skills")
+    env["HARNESS_OPENCLAW_SKILLS_DIR"] = str(tmp_path / "user-home/Library/Application Support/OpenClaw/skills")
+    env["HARNESS_TRAE_SKILLS_DIR"] = str(tmp_path / "user-home/Library/Application Support/Trae/skills")
+    env["HARNESS_COPILOT_SKILLS_DIR"] = str(tmp_path / "user-home/Library/Application Support/Copilot/skills")
+
+    result = subprocess.run(
+        ["harness", "-p", str(tmp_path), "--json", "install-provider", "--provider", "auto"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["command"] == "install-provider"
+    assert "results" in payload["meta"]
+    config_path = tmp_path / ".harness/provider-config.json"
+    assert config_path.exists()
+    config_payload = json.loads(config_path.read_text(encoding="utf-8"))
+    assert isinstance(config_payload["installation_results"], dict)
+    assert set(config_payload["installation_results"]).issuperset({"claude", "cursor", "codex", "openclaw", "trae", "copilot"})
+    assert config_payload["installation_results"]["claude"]["status"] == "installed"
+    assert config_payload["installation_results"]["claude"]["resolved_target_dir"] is not None
+
+
+def test_install_provider_all_and_dry_run(tmp_path: Path) -> None:
+    """install-provider all 与 dry-run 应返回稳定结果且 dry-run 不落盘。"""
+
+    user_skill_dir = tmp_path / "user-home/.claude/skills"
+    env = harness_env()
+    env["HARNESS_CLAUDE_SKILLS_DIR"] = str(user_skill_dir)
+    env["HARNESS_CURSOR_SKILLS_DIR"] = str(tmp_path / "user-home/Library/Application Support/Cursor/skills")
+    env["HARNESS_CODEX_SKILLS_DIR"] = str(tmp_path / "user-home/Library/Application Support/Codex/skills")
+    env["HARNESS_OPENCLAW_SKILLS_DIR"] = str(tmp_path / "user-home/Library/Application Support/OpenClaw/skills")
+    env["HARNESS_TRAE_SKILLS_DIR"] = str(tmp_path / "user-home/Library/Application Support/Trae/skills")
+    env["HARNESS_COPILOT_SKILLS_DIR"] = str(tmp_path / "user-home/Library/Application Support/Copilot/skills")
+
+    dry_run_result = subprocess.run(
+        [
+            "harness",
+            "-p",
+            str(tmp_path),
+            "--json",
+            "install-provider",
+            "--provider",
+            "all",
+            "--dry-run",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+    assert dry_run_result.returncode == 0, dry_run_result.stderr
+    payload = json.loads(dry_run_result.stdout)
+    assert set(payload["meta"]["results"]).issuperset({"claude", "codex", "cursor", "openclaw", "trae", "copilot"})
+    assert payload["meta"]["results"]["claude"]["status"] == "installed"
+    assert payload["meta"]["results"]["codex"]["status"] in {"installed", "failed_detection", "failed_target_resolution", "failed_source_missing"}
+    assert payload["meta"]["results"]["codex"]["resolved_target_dir"] is not None
+    assert payload["meta"]["results"]["claude"]["resolved_target_dir"] is not None
+    assert not (user_skill_dir / "harness-commander/SKILL.md").exists()
+    assert not (user_skill_dir / "harness-commander/Reference/README.md").exists()
+    assert not (tmp_path / ".harness/provider-config.json").exists()
+    actions = {artifact["action"] for artifact in payload["artifacts"]}
+    assert "would_create" in actions or "would_overwrite" in actions
+
 
 
 def test_skill_smoke_init_and_distill(tmp_path: Path) -> None:

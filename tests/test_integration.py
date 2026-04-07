@@ -21,6 +21,44 @@ from harness_commander.application.model_tasks import HostModelError  # noqa: E4
 from harness_commander.cli import main  # noqa: E402
 
 
+def write_provider_config(
+    root: Path,
+    *,
+    default_provider: str,
+    status: str = "config_only",
+    support_level: str = "config_only",
+) -> None:
+    """写入集成测试使用的最小 provider 配置。"""
+
+    config_path = root / ".harness/provider-config.json"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "default_provider": default_provider,
+                "installed_providers": [default_provider],
+                "installation_results": {
+                    default_provider: {
+                        "status": status,
+                        "support_level": support_level,
+                        "detected": True,
+                        "cli_command": default_provider,
+                        "configured_at": "2026-04-07T00:00:00Z",
+                        "message": "configured in integration test",
+                    }
+                },
+                "last_resolved_provider": default_provider,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+
 def test_full_workflow_with_dry_run(tmp_path: Path, capsys) -> None:
     """测试完整工作流程（使用 dry-run 模式）。"""
 
@@ -153,12 +191,108 @@ def test_command_chaining(tmp_path: Path, capsys) -> None:
     assert check_result["meta"]["warning_count"] >= 1
 
 
+def test_install_provider_then_host_model_commands_use_config(tmp_path: Path, capsys, monkeypatch) -> None:
+    """install-provider 安装用户级 Claude skill 后，后续命令仍应读取 provider 配置。"""
+
+    exit_code = main(["-p", str(tmp_path), "init"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+
+    fake_user_skill_dir = tmp_path / "user-home/.claude/skills"
+    monkeypatch.setenv("HARNESS_CLAUDE_SKILLS_DIR", str(fake_user_skill_dir))
+
+    install_exit_code = main(
+        ["-p", str(tmp_path), "--json", "install-provider", "--provider", "claude"]
+    )
+    install_captured = capsys.readouterr()
+    install_payload = json.loads(install_captured.out.strip())
+    assert install_exit_code == 0
+    assert install_payload["meta"]["results"]["claude"]["status"] == "installed"
+    assert (fake_user_skill_dir / "harness-commander/SKILL.md").exists()
+    assert (fake_user_skill_dir / "harness-commander/Reference/README.md").exists()
+
+    test_doc = tmp_path / "requirements.md"
+    test_doc.write_text("# 需求文档\n\n## 业务目标\n构建一个测试系统\n", encoding="utf-8")
+
+    with patch(
+        "harness_commander.application.commands.distill_with_host_model",
+        return_value={
+            "goals": ["提升覆盖率"],
+            "rules": ["必须补齐 provider 配置"],
+            "limits": ["只做最小重构"],
+            "prohibitions": ["不得把 override 当主路径"],
+        },
+    ):
+        exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "--json",
+                "distill",
+                str(test_doc),
+                "--mode",
+                "host-model",
+            ]
+        )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out.strip())
+
+    assert exit_code == 0
+    assert payload["meta"]["provider"] == "claude"
+    assert payload["meta"]["provider_source"] == "default_provider"
+    assert payload["meta"]["model_provider"] == "claude-cli"
+
+
+def test_host_model_distill_uses_configured_provider_integration(
+    tmp_path: Path, capsys
+) -> None:
+    """集成层应验证 host-model 默认读取配置 provider。"""
+
+    exit_code = main(["-p", str(tmp_path), "init"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    write_provider_config(tmp_path, default_provider="codex")
+
+    test_doc = tmp_path / "requirements.md"
+    test_doc.write_text("# 需求文档\n\n## 业务目标\n构建一个测试系统\n", encoding="utf-8")
+
+    with patch(
+        "harness_commander.application.commands.distill_with_host_model",
+        return_value={
+            "goals": ["提升覆盖率"],
+            "rules": ["必须补齐 provider 配置"],
+            "limits": ["只做最小重构"],
+            "prohibitions": ["不得把 override 当主路径"],
+        },
+    ):
+        exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "--json",
+                "distill",
+                str(test_doc),
+                "--mode",
+                "host-model",
+            ]
+        )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out.strip())
+
+    assert exit_code == 0
+    assert payload["meta"]["provider"] == "codex"
+    assert payload["meta"]["provider_source"] == "default_provider"
+    assert payload["meta"]["model_provider"] == "codex-cli"
+
+
+
 def test_host_model_distill_json_contract(tmp_path: Path, capsys) -> None:
     """host-model 模式应保留统一 JSON 协议与 fallback 字段。"""
 
     exit_code = main(["-p", str(tmp_path), "init"])
     captured = capsys.readouterr()
     assert exit_code == 0
+    write_provider_config(tmp_path, default_provider="claude")
 
     test_doc = tmp_path / "requirements.md"
     test_doc.write_text(
@@ -194,6 +328,121 @@ def test_host_model_distill_json_contract(tmp_path: Path, capsys) -> None:
         for warning in payload["warnings"]
     )
 
+
+
+def test_run_agents_uses_configured_provider_and_override_integration(
+    tmp_path: Path, capsys
+) -> None:
+    """集成层应验证 run-agents 默认配置与显式 override。"""
+
+    exit_code = main(["-p", str(tmp_path), "init"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    write_provider_config(tmp_path, default_provider="cursor")
+
+    v1_index = tmp_path / "docs/product-specs/v1/index.md"
+    v1_index.parent.mkdir(parents=True, exist_ok=True)
+    v1_index.write_text("# spec v1 index\n", encoding="utf-8")
+
+    spec_file = tmp_path / "docs/product-specs/sample.md"
+    spec_file.write_text(
+        "# 样例规格\n\n## 业务目标\n- 支持更多 provider\n\n## 核心逻辑\n- 顺序阶段编排\n\n## 验收标准\n- 返回 agent_runs\n",
+        encoding="utf-8",
+    )
+    plan_file = tmp_path / "docs/exec-plans/active/sample.md"
+    plan_file.write_text(
+        "# 样例计划\n\n## Goal\n- 完成编排\n\n## Context\n- 样例上下文\n\n## Business Logic\n- 顺序执行\n\n## Scope\n- requirements\n\n## Acceptance Criteria\n- 输出阶段摘要\n\n## Exception Handling\n- 验证失败不整理 PR\n\n## Verification\n- 检查验证状态\n\n## References\n- `ARCHITECTURE.md`\n- `docs/PLANS.md`\n- `docs/product-specs/v1/index.md`\n\n## ULW 1: 编排\n\n### 目标\n- 完成执行\n\n### 涉及范围\n- 读取文档\n\n### 验收标准\n- 输出阶段摘要\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        [
+            "-p",
+            str(tmp_path),
+            "--json",
+            "run-agents",
+            "--spec",
+            str(spec_file),
+            "--plan",
+            str(plan_file),
+            "--dry-run",
+        ]
+    )
+    captured = capsys.readouterr()
+    default_payload = json.loads(captured.out.strip())
+
+    assert exit_code == 0
+    assert default_payload["meta"]["provider"] == "cursor"
+    assert default_payload["meta"]["provider_source"] == "default_provider"
+
+    override_exit_code = main(
+        [
+            "-p",
+            str(tmp_path),
+            "--json",
+            "run-agents",
+            "--spec",
+            str(spec_file),
+            "--plan",
+            str(plan_file),
+            "--provider",
+            "copilot",
+            "--dry-run",
+        ]
+    )
+    override_captured = capsys.readouterr()
+    override_payload = json.loads(override_captured.out.strip())
+
+    assert override_exit_code == 0
+    assert override_payload["meta"]["provider"] == "copilot"
+    assert override_payload["meta"]["provider_source"] == "override"
+
+
+
+def test_run_agents_json_contract(tmp_path: Path, capsys) -> None:
+    """run-agents 应返回稳定 JSON 协议。"""
+
+    exit_code = main(["-p", str(tmp_path), "init"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+
+    v1_index = tmp_path / "docs/product-specs/v1/index.md"
+    v1_index.parent.mkdir(parents=True, exist_ok=True)
+    v1_index.write_text("# spec v1 index\n", encoding="utf-8")
+
+    spec_file = tmp_path / "docs/product-specs/sample.md"
+    spec_file.write_text(
+        "# 样例规格\n\n## 业务目标\n- 支持更多 provider\n\n## 核心逻辑\n- 顺序阶段编排\n\n## 验收标准\n- 返回 agent_runs\n",
+        encoding="utf-8",
+    )
+    plan_file = tmp_path / "docs/exec-plans/active/sample.md"
+    plan_file.write_text(
+        "# 样例计划\n\n## Goal\n- 完成编排\n\n## Context\n- 样例上下文\n\n## Business Logic\n- 顺序执行\n\n## Scope\n- requirements\n\n## Acceptance Criteria\n- 输出阶段摘要\n\n## Exception Handling\n- 验证失败不整理 PR\n\n## Verification\n- 检查验证状态\n\n## References\n- `ARCHITECTURE.md`\n- `docs/PLANS.md`\n- `docs/product-specs/v1/index.md`\n\n## ULW 1: 编排\n\n### 目标\n- 完成执行\n\n### 涉及范围\n- 读取文档\n\n### 验收标准\n- 输出阶段摘要\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        [
+            "-p",
+            str(tmp_path),
+            "--json",
+            "run-agents",
+            "--spec",
+            str(spec_file),
+            "--plan",
+            str(plan_file),
+            "--provider",
+            "cursor",
+            "--dry-run",
+        ]
+    )
+    captured = capsys.readouterr()
+    result = json.loads(captured.out.strip())
+
+    assert exit_code == 0
+    assert result["command"] == "run-agents"
+    assert result["meta"]["provider"] == "cursor"
+    assert isinstance(result["meta"]["agent_runs"], list)
 
 
 def test_check_reports_unquantified_rule_sources_in_summary(

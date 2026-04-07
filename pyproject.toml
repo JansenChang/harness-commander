@@ -53,7 +53,7 @@ include = ["harness_commander*"]
 namespaces = true
 
 [tool.setuptools.package-data]
-harness_commander = ["init_templates/**/*"]
+harness_commander = ["init_templates/**/*", "host_templates/**/*"]
 
 [tool.pytest.ini_options]
 addopts = "-q"

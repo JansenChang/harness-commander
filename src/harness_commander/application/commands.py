@@ -13,6 +13,20 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from harness_commander.application.host_providers import (
+    INSTALL_TARGETS,
+    SUPPORTED_PROVIDERS,
+    normalize_provider,
+    provider_meta,
+)
+from harness_commander.application.provider_config import (
+    load_provider_config,
+    mark_provider_installed,
+    resolve_effective_provider,
+    save_provider_config,
+)
+from harness_commander.application.provider_installers import install_provider_target
+
 MAX_SYNC_SUMMARY_FILES = 3
 MAX_SYNC_SUMMARY_LINES = 2
 
@@ -32,6 +46,8 @@ from harness_commander.infrastructure.docs import (
     build_plan_path,
     ensure_governance_documents,
     load_init_templates,
+    parse_active_plan,
+    parse_product_spec,
     render_plan_markdown,
     validate_plan_document,
 )
@@ -449,15 +465,27 @@ def run_distill(
     source_path: str,
     dry_run: bool,
     mode: str = "heuristic",
+    provider: str | None = None,
 ) -> CommandResult:
     """将长文档压缩为参考材料。"""
 
+    normalized_provider: str | None = None
+    provider_source = "not_used"
+    if mode in {"host-model", "auto"}:
+        normalized_provider, provider_source, _ = resolve_effective_provider(
+            root,
+            override=provider,
+            persist_last_resolved=False,
+            dry_run=dry_run,
+        )
     LOGGER.info(
-        "开始执行 distill 命令 root=%s source_path=%s dry_run=%s mode=%s",
+        "开始执行 distill 命令 root=%s source_path=%s dry_run=%s mode=%s provider=%s provider_source=%s",
         root,
         source_path,
         dry_run,
         mode,
+        normalized_provider,
+        provider_source,
     )
 
     source_file = Path(source_path)
@@ -496,6 +524,7 @@ def run_distill(
         content=content,
         source_name=source_name,
         mode=selected_mode,
+        provider=normalized_provider,
     )
     extraction_source = extraction_report["extraction_source"]
     fallback_from = extraction_report["fallback_from"]
@@ -586,6 +615,9 @@ def run_distill(
             "fallback_reason": fallback_reason,
             "model_provider": model_provider,
             "model_name": model_name,
+            "provider": normalized_provider,
+            "provider_source": provider_source,
+            "supported_providers": list(SUPPORTED_PROVIDERS),
         },
     )
 
@@ -606,6 +638,7 @@ def _run_distill_extraction(
     content: str,
     source_name: str,
     mode: str,
+    provider: str | None,
 ) -> tuple[str, dict[str, Any]]:
     """按指定模式执行 distill 提炼。"""
 
@@ -624,10 +657,19 @@ def _run_distill_extraction(
     model_name: str | None = None
 
     if mode in {"host-model", "auto"}:
-        model_provider = "claude-cli"
-        model_name = "claude"
+        if provider is None:
+            raise HarnessCommanderError(
+                code="provider_not_configured",
+                message="当前模式需要可用 provider，请先执行 harness install-provider 或显式传入 --provider。",
+                location="provider",
+            )
+        model_provider, model_name = provider_meta(provider)
         try:
-            structured = distill_with_host_model(source_name=source_name, content=content)
+            structured = distill_with_host_model(
+                provider=provider,
+                source_name=source_name,
+                content=content,
+            )
         except HostModelError as error:
             fallback_from = "host-model"
             fallback_reason = str(error)
@@ -1015,6 +1057,343 @@ def _file_contains_secret_literal(path: Path) -> bool:
         r"(?i)(api_key|secret_key|access_token|private_key|password)\s*=\s*['\"][^'\"]{8,}['\"]"
     )
     return bool(secret_assignment.search(content))
+
+
+def run_run_agents(
+    root: Path,
+    *,
+    spec_path: str,
+    plan_path: str,
+    provider: str | None,
+    dry_run: bool,
+) -> CommandResult:
+    """按 product spec 与 active exec plan 顺序编排多 agent 阶段。"""
+
+    normalized_provider, provider_source, _ = resolve_effective_provider(
+        root,
+        override=provider,
+        persist_last_resolved=False,
+        dry_run=dry_run,
+    )
+    spec_file = Path(spec_path)
+    if not spec_file.is_absolute():
+        spec_file = root / spec_path
+    plan_file = Path(plan_path)
+    if not plan_file.is_absolute():
+        plan_file = root / plan_path
+
+    if not spec_file.exists():
+        raise HarnessCommanderError(
+            code="spec_not_found",
+            message=f"产品规格文档不存在：{spec_file}",
+            location=str(spec_file),
+        )
+    if not plan_file.exists():
+        raise HarnessCommanderError(
+            code="plan_not_found",
+            message=f"执行计划文档不存在：{plan_file}",
+            location=str(plan_file),
+        )
+
+    ensure_governance_documents(root)
+    validation = validate_plan_document(root, plan_file)
+    if validation.issues:
+        return CommandResult(
+            command="run-agents",
+            status=ResultStatus.FAILURE,
+            summary="执行计划不满足最小治理要求，已停止多 agent 编排。",
+            errors=validation.issues,
+            meta={
+                "root": str(root),
+                "spec_path": str(spec_file),
+                "plan_path": str(plan_file),
+                "provider": normalized_provider,
+                "provider_source": provider_source,
+                "issue_count": len(validation.issues),
+            },
+        )
+
+    parsed_spec = parse_product_spec(spec_file)
+    parsed_plan = parse_active_plan(plan_file)
+    requirements_summary = _build_requirements_stage_summary(parsed_spec)
+    plan_summary = _build_plan_stage_summary(parsed_plan)
+    implement_summary = _build_implement_stage_summary(
+        requirements_summary=requirements_summary,
+        plan_summary=plan_summary,
+        provider=normalized_provider,
+    )
+    verify_stage = _build_verify_stage(root)
+
+    agent_runs = [
+        {
+            "stage": "requirements",
+            "provider": normalized_provider,
+            "status": "success",
+            "summary": requirements_summary,
+        },
+        {
+            "stage": "plan",
+            "provider": normalized_provider,
+            "status": "success",
+            "summary": plan_summary,
+        },
+        {
+            "stage": "implement",
+            "provider": normalized_provider,
+            "status": "success",
+            "summary": implement_summary,
+        },
+        verify_stage,
+    ]
+
+    artifacts: list[CommandArtifact] = []
+    warnings: list[CommandMessage] = []
+    errors: list[CommandMessage] = []
+
+    if verify_stage["status"] != "success":
+        warnings.append(
+            CommandMessage(
+                code="verify_not_ready_for_pr",
+                message="验证尚未通过，已阻断 PR 摘要整理阶段。",
+                location=str(root / ".claude/tmp/last-verify.status"),
+                detail={"verify_status": verify_stage["status"]},
+            )
+        )
+        status = ResultStatus.WARNING
+        summary = "多 agent 阶段编排完成，但验证未通过，PR 摘要未生成。"
+    else:
+        pr_summary_path = _build_pr_summary_path(root, parsed_plan.title)
+        pr_summary_content = _render_pr_summary(
+            spec_title=parsed_spec.title,
+            plan_title=parsed_plan.title,
+            provider=normalized_provider,
+            agent_runs=agent_runs,
+            verification_summary=str(verify_stage.get("details", {}).get("summary", "")).strip(),
+        )
+        artifact = write_text(pr_summary_path, pr_summary_content, dry_run=dry_run, overwrite=False)
+        artifacts.append(artifact)
+        agent_runs.append(
+            {
+                "stage": "pr-summary",
+                "provider": normalized_provider,
+                "status": "success",
+                "summary": f"已整理 PR 摘要：{pr_summary_path}",
+                "artifact_path": str(pr_summary_path),
+            }
+        )
+        status = ResultStatus.SUCCESS
+        summary = "多 agent 阶段编排完成，验证通过并已生成 PR 摘要。"
+
+    return CommandResult(
+        command="run-agents",
+        status=status,
+        summary=summary,
+        artifacts=artifacts,
+        warnings=warnings,
+        errors=errors,
+        meta={
+            "root": str(root),
+            "spec_path": str(spec_file),
+            "plan_path": str(plan_file),
+            "provider": normalized_provider,
+            "provider_source": provider_source,
+            "supported_providers": list(SUPPORTED_PROVIDERS),
+            "agent_runs": agent_runs,
+            "dry_run": dry_run,
+        },
+    )
+
+
+def _build_requirements_stage_summary(parsed_spec: Any) -> str:
+    """生成 requirements 阶段摘要。"""
+
+    goals = parsed_spec.sections.get("业务目标")
+    rules = parsed_spec.sections.get("核心逻辑") or parsed_spec.sections.get("关键规则")
+    acceptance = parsed_spec.sections.get("验收标准")
+    goal_text = "；".join(goals.items[:3]) if goals else "未显式提取到业务目标"
+    rule_text = "；".join(rules.items[:3]) if rules else "未显式提取到关键规则"
+    acceptance_text = (
+        "；".join(acceptance.items[:2]) if acceptance and acceptance.items else "未显式提取到验收标准"
+    )
+    return f"需求提炼完成：目标={goal_text}；规则={rule_text}；验收={acceptance_text}。"
+
+
+def _build_plan_stage_summary(parsed_plan: Any) -> str:
+    """生成 plan 阶段摘要。"""
+
+    scope = parsed_plan.sections.get("Scope")
+    verification = parsed_plan.sections.get("Verification")
+    ulw_count = len(parsed_plan.ulws)
+    scope_text = "；".join(scope.items[:3]) if scope and scope.items else "未显式提取到范围项"
+    verification_text = (
+        "；".join(verification.items[:2])
+        if verification and verification.items
+        else "未显式提取到验证步骤"
+    )
+    return f"计划提炼完成：ULW={ulw_count} 个；范围={scope_text}；验证={verification_text}。"
+
+
+def _build_implement_stage_summary(
+    *, requirements_summary: str, plan_summary: str, provider: str
+) -> str:
+    """生成 implement 阶段摘要。"""
+
+    return (
+        f"实施阶段已按 {provider} 工作流生成执行摘要，先承接需求约束，再承接计划拆分。"
+        f" requirements={requirements_summary} plan={plan_summary}"
+    )
+
+
+def _build_verify_stage(root: Path) -> dict[str, Any]:
+    """读取现有验证状态文件并生成 verify 阶段结果。"""
+
+    status_path = root / ".claude/tmp/last-verify.status"
+    summary_path = root / ".claude/tmp/verification-summary.md"
+    if not status_path.exists():
+        return {
+            "stage": "verify",
+            "status": "warning",
+            "summary": "未找到验证状态文件。",
+            "details": {"status_path": str(status_path), "summary": ""},
+        }
+
+    verify_status = status_path.read_text(encoding="utf-8").strip().lower() or "unknown"
+    verification_summary = (
+        summary_path.read_text(encoding="utf-8").strip() if summary_path.exists() else ""
+    )
+    return {
+        "stage": "verify",
+        "status": "success" if verify_status == "pass" else "warning",
+        "summary": f"验证状态：{verify_status}",
+        "details": {
+            "status_path": str(status_path),
+            "summary_path": str(summary_path),
+            "summary": verification_summary,
+        },
+    }
+
+
+def _build_pr_summary_path(root: Path, plan_title: str) -> Path:
+    """生成 PR 摘要路径。"""
+
+    summary_dir = root / "docs/generated/pr-summary"
+    timestamp = utc_timestamp_precise().replace(":", "-")
+    summary_path = next_available_path(
+        summary_dir / f"{timestamp}-{slugify(plan_title, fallback='pr-summary')}.md"
+    )
+    return Path(summary_path)
+
+
+def _render_pr_summary(
+    *,
+    spec_title: str,
+    plan_title: str,
+    provider: str,
+    agent_runs: list[dict[str, Any]],
+    verification_summary: str,
+) -> str:
+    """渲染最小 PR 摘要。"""
+
+    run_lines = "\n".join(
+        f"- {run['stage']}: {run['summary']}" for run in agent_runs
+    )
+    verification_block = verification_summary or "- 验证摘要文件存在但为空，请人工补充。"
+    return (
+        f"# PR Summary\n\n"
+        f"## Summary\n"
+        f"- Product spec: {spec_title}\n"
+        f"- Active plan: {plan_title}\n"
+        f"- Provider: {provider}\n\n"
+        f"## Scope\n"
+        f"{run_lines}\n\n"
+        f"## Verification\n"
+        f"{verification_block}\n\n"
+        f"## Evidence\n"
+        f"- 建议在提交前追加 harness collect-evidence 记录整轮执行事实。\n\n"
+        f"## Risks / Follow-ups\n"
+        f"- 如 provider 本地 CLI 不可用，应优先修复本地集成再继续自动化流程。\n"
+        f"- 如验证状态不是 PASS，不应直接整理 PR。\n"
+    )
+
+
+def run_install_provider(
+    root: Path,
+    *,
+    provider: str,
+    scope: str,
+    install_mode: str,
+    dry_run: bool,
+) -> CommandResult:
+    """探测并配置项目默认 provider。"""
+
+    config = load_provider_config(root)
+    results, install_artifacts = install_provider_target(
+        root,
+        provider=provider,
+        scope=scope,
+        install_mode=install_mode,
+        dry_run=dry_run,
+    )
+    updated_config = config
+    artifacts: list[CommandArtifact] = [*install_artifacts]
+    warnings: list[CommandMessage] = []
+    installed_count = 0
+    resolved_count = 0
+    detected_count = 0
+
+    for candidate, result in results.items():
+        updated_config = mark_provider_installed(
+            updated_config,
+            provider=candidate,
+            installation_result=result,
+            set_as_default=False,
+        )
+        if result.get("detected"):
+            detected_count += 1
+        if result.get("resolved_target_dir"):
+            resolved_count += 1
+        if result["status"] == "installed":
+            installed_count += 1
+        else:
+            warnings.append(
+                CommandMessage(
+                    code="provider_install_incomplete",
+                    message=f"provider {candidate} 未完成 {scope} 范围的自动安装。",
+                    location=str(root / ".harness/provider-config.json"),
+                    detail=result,
+                )
+            )
+
+    updated_config["last_resolved_provider"] = updated_config.get("default_provider")
+    artifacts.append(
+        save_provider_config(root, updated_config, dry_run=dry_run, overwrite=True)
+    )
+
+    status = ResultStatus.SUCCESS if installed_count > 0 else ResultStatus.WARNING
+    failed_count = len(results) - installed_count
+    summary = (
+        f"provider 安装配置完成，共处理 {len(results)} 个目标，"
+        f"{detected_count} 个已探测到宿主，{resolved_count} 个已解析目标目录，"
+        f"{installed_count} 个已完成真实安装，{failed_count} 个返回了明确失败或待处理结果。"
+    )
+    return CommandResult(
+        command="install-provider",
+        status=status,
+        summary=summary,
+        artifacts=artifacts,
+        warnings=warnings,
+        meta={
+            "root": str(root),
+            "provider": provider,
+            "install_targets": list(INSTALL_TARGETS),
+            "results": results,
+            "default_provider": updated_config.get("default_provider"),
+            "installed_providers": updated_config.get("installed_providers", []),
+            "scope": scope,
+            "install_mode": install_mode,
+            "dry_run": dry_run,
+        },
+    )
 
 
 def run_check(root: Path, *, dry_run: bool) -> CommandResult:

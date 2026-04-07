@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import json
-import subprocess
 from typing import Any
+
+from harness_commander.application.host_providers import run_structured_command
 
 DISTILL_SCHEMA = {
     "type": "object",
@@ -23,41 +23,24 @@ class HostModelError(RuntimeError):
     """宿主模型调用失败。"""
 
 
-def distill_with_host_model(*, source_name: str, content: str) -> dict[str, list[str]]:
-    """调用 Claude CLI 生成四类结构化提炼结果。"""
+def distill_with_host_model(
+    *, provider: str, source_name: str, content: str
+) -> dict[str, list[str]]:
+    """调用宿主工具 CLI 生成四类结构化提炼结果。"""
 
     prompt = _build_distill_prompt(source_name=source_name, content=content)
-    command = [
-        "claude",
-        "-p",
-        "--output-format",
-        "json",
-        "--json-schema",
-        json.dumps(DISTILL_SCHEMA, ensure_ascii=False),
-        prompt,
-    ]
     try:
-        result = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=120,
+        payload = run_structured_command(
+            provider=provider,
+            prompt=prompt,
+            schema=DISTILL_SCHEMA,
+            timeout_seconds=120,
         )
-    except OSError as error:
-        raise HostModelError(f"无法调用 Claude CLI：{error}") from error
-    except subprocess.TimeoutExpired as error:
-        raise HostModelError("Claude CLI 调用超时。") from error
-
-    if result.returncode != 0:
-        stderr = result.stderr.strip() or result.stdout.strip() or "unknown error"
-        raise HostModelError(f"Claude CLI 返回非零退出码：{stderr}")
-
-    try:
-        payload = json.loads(result.stdout)
         structured_output = payload["structured_output"]
-    except (json.JSONDecodeError, KeyError, TypeError) as error:
-        raise HostModelError("Claude CLI 返回内容无法解析为结构化结果。") from error
+    except (KeyError, TypeError) as error:
+        raise HostModelError("宿主工具 CLI 返回内容无法解析为结构化结果。") from error
+    except RuntimeError as error:
+        raise HostModelError(str(error)) from error
 
     normalized = {
         key: _normalize_items(structured_output.get(key, []))

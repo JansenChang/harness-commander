@@ -17,10 +17,13 @@ from harness_commander.application.commands import (
     run_collect_evidence,
     run_distill,
     run_init,
+    run_install_provider,
     run_plan_check,
     run_propose_plan,
+    run_run_agents,
     run_sync,
 )
+from harness_commander.application.host_providers import INSTALL_TARGETS
 from harness_commander.domain.models import CommandResult
 
 LOGGER = logging.getLogger(__name__)
@@ -123,7 +126,55 @@ def build_parser() -> argparse.ArgumentParser:
         help="提炼模式：heuristic（默认）、host-model、auto",
     )
     distill_parser.add_argument(
+        "--provider",
+        default=argparse.SUPPRESS,
+        help="宿主工具提供者；未传时优先读取已安装/已配置的默认 provider，仅作为临时 override",
+    )
+    distill_parser.add_argument(
         "--dry-run", action="store_true", help="仅展示变更，不实际写入"
+    )
+
+    run_agents_parser = subparsers.add_parser(
+        "run-agents",
+        help="按 product spec 与 active exec plan 顺序编排多 agent 阶段",
+    )
+    add_path_argument(run_agents_parser, default=argparse.SUPPRESS)
+    run_agents_parser.add_argument("--spec", required=True, help="产品规格文档路径")
+    run_agents_parser.add_argument("--plan", required=True, help="执行计划文档路径")
+    run_agents_parser.add_argument(
+        "--provider",
+        default=argparse.SUPPRESS,
+        help="宿主工具提供者；未传时读取已安装/已配置的默认 provider，仅作为临时 override",
+    )
+    run_agents_parser.add_argument(
+        "--dry-run", action="store_true", help="仅展示阶段产物，不实际写入"
+    )
+
+    install_provider_parser = subparsers.add_parser(
+        "install-provider",
+        help="探测并配置项目默认 provider",
+    )
+    add_path_argument(install_provider_parser, default=argparse.SUPPRESS)
+    install_provider_parser.add_argument(
+        "--provider",
+        required=True,
+        choices=INSTALL_TARGETS,
+        help="provider 安装目标：单个 provider、auto 或 all",
+    )
+    install_provider_parser.add_argument(
+        "--scope",
+        choices=("user", "project"),
+        default="user",
+        help="安装范围：user 或 project",
+    )
+    install_provider_parser.add_argument(
+        "--install-mode",
+        choices=("copy", "link"),
+        default="copy",
+        help="安装方式：copy 或 link",
+    )
+    install_provider_parser.add_argument(
+        "--dry-run", action="store_true", help="仅展示安装结果，不实际写入配置"
     )
 
     check_parser = subparsers.add_parser("check", help="检查项目结构与文档一致性")
@@ -203,6 +254,27 @@ def main(argv: list[str] | None = None) -> int:
             source_path=args.source,
             dry_run=args.dry_run,
             mode=args.mode,
+            provider=getattr(args, "provider", None),
+        )
+    elif args.command == "run-agents":
+        result = execute_command(
+            "run-agents",
+            run_run_agents,
+            root=root,
+            spec_path=args.spec,
+            plan_path=args.plan,
+            provider=getattr(args, "provider", None),
+            dry_run=args.dry_run,
+        )
+    elif args.command == "install-provider":
+        result = execute_command(
+            "install-provider",
+            run_install_provider,
+            root=root,
+            provider=args.provider,
+            scope=args.scope,
+            install_mode=args.install_mode,
+            dry_run=args.dry_run,
         )
     elif args.command == "check":
         result = execute_command(

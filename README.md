@@ -67,21 +67,72 @@ harness collect-evidence -p /path/to/project \
   --log "通过率 100%"
 ```
 
-## 🔧 Claude Code Skill 集成
+## 🔧 宿主工具 Provider 安装与多宿主 Wrapper 集成
 
-Harness-Commander 可以通过项目内 skill 集成到 Claude Code，优先用于包装已安装的本地 `harness` CLI。
+Harness-Commander 当前在产品层正式支持 `cursor`、`claude`、`codex`、`openclaw`、`trae`、`copilot` 六类宿主工具 provider。主路径已调整为“安装/配置阶段绑定 provider，运行时默认读取项目配置，`--provider` 仅作为临时 override”；安装阶段不再假设所有宿主都消费同一种 `SKILL.md`，而是按宿主类型安装不同 wrapper：Claude/Codex/OpenClaw/Trae/Copilot 走 `skill`，Cursor 走 `command`。
+
+### Provider 安装与默认绑定
+
+```bash
+# 单 provider 配置（默认 user + copy）
+harness install-provider --provider claude
+
+# 安装到项目级目录
+harness install-provider --provider cursor --scope project
+
+# 使用符号链接安装
+harness install-provider --provider trae --scope user --install-mode link
+
+# 自动探测本机已安装 provider 并写入配置
+harness install-provider --provider auto
+
+# 对所有支持 provider 执行安装尝试并记录结果
+harness install-provider --provider all
+```
+
+安装结果会写入项目级配置文件 `.harness/provider-config.json`，保存：
+- `default_provider`
+- `installed_providers`
+- `installation_results`
+- 最近一次解析的 provider
+
+运行时优先级：
+1. 显式 `--provider`
+2. 项目配置中的 `default_provider`
+3. 已安装 provider 列表中的首个可用项
+
+### Provider 安装规格表
+
+| provider | wrapper 类型 | user 默认落点 | project 默认落点 |
+| --- | --- | --- | --- |
+| `claude` | `skill` | Linux/macOS: `~/.claude/skills/harness-commander`；Windows: `%APPDATA%/Claude/skills/harness-commander` | `.claude/skills/harness` |
+| `cursor` | `command` | Linux: `~/.cursor/commands`；macOS: `~/Library/Application Support/Cursor/commands`；Windows: `%APPDATA%/Cursor/commands` | `.cursor/commands` |
+| `codex` | `skill` | Linux/macOS: `~/.codex/skills/harness-commander`；Windows: `%APPDATA%/Codex/skills/harness-commander` | `.codex/skills/harness` |
+| `openclaw` | `skill` | Linux/macOS: `~/.openclaw/skills/harness-commander`；Windows: `%APPDATA%/OpenClaw/skills/harness-commander` | `.openclaw/skills/harness` |
+| `trae` | `skill` | Linux/macOS: `~/.trae/skills/harness-commander`；Windows: `%APPDATA%/Trae/skills/harness-commander` | `.trae/skills/harness` |
+| `copilot` | `skill` | Linux/macOS: `~/.copilot/skills/harness-commander`；Windows: `%APPDATA%/Copilot/skills/harness-commander` | `.copilot/skills/harness` |
 
 ### Skill 安装
+
+推荐主路径：
 
 ```bash
 # 1. 确保 Harness-Commander 已安装
 pip install -e .
 
-# 2. 安装项目内 skill
+# 2. 通过 Python 主入口安装 Claude user-scope skill 并写入 provider 配置
+harness install-provider --provider claude
+```
+
+该命令会根据 provider、`--scope` 与 `--install-mode` 选择不同 wrapper 模板与目标目录，并同步更新 `.harness/provider-config.json`。运行时引用的 provider 模板统一放在 `src/harness_commander/host_templates/`，并作为 package data 随 Python 包分发。对于 Claude，Linux/macOS 默认写入 `~/.claude/skills/harness-commander`，Windows 默认写入 `%APPDATA%/Claude/skills/harness-commander`。对于 skill 型 provider，会安装完整 `harness-commander/` skill 目录，而不是只写一个 `SKILL.md`；其中 `Reference/` 也会作为正式产物一起输出。
+
+兼容入口：
+
+```bash
 ./install-skill.sh
 ```
 
-安装脚本会把项目级 skill 写入 `.claude/skills/harness/`，命令名保持为 `/harness`。
+`install-skill.sh` 继续保留，但只作为兼容包装层，不再是主安装路径。
 
 ### Skill 使用
 
@@ -103,8 +154,9 @@ pip install -e .
 ### 当前模型边界
 
 - `distill` 当前默认使用规则/启发式提炼生成参考材料。
-- `distill --mode host-model` 会通过本地 `claude` CLI 调用宿主模型做结构化提炼。
-- `distill --mode auto` 会优先尝试宿主模型，失败后自动回退到启发式路径。
+- `distill --mode host-model` 与 `distill --mode auto` 默认读取项目已安装/已配置的 provider；显式 `--provider <provider>` 仅覆盖当前命令。
+- `run-agents --spec <spec> --plan <plan>` 默认读取项目已安装/已配置的 provider；显式 `--provider <provider>` 仅覆盖当前命令。
+- `run-agents` 会按 requirements -> plan -> implement -> verify -> pr-summary 顺序编排阶段。
 - `propose-plan`、`sync`、`plan-check`、`check`、`collect-evidence` 当前仍由 Harness 主导执行；其中只有 `propose-plan` 保留未来接宿主模型生成内容的扩展位，`sync` / `plan-check` / `check` / `collect-evidence` 仅允许未来增加摘要或建议文案增强，不能接管状态、产物路径和事实字段。
 
 ### 参数顺序提示
@@ -231,9 +283,10 @@ Harness-Commander 支持完整的治理生命周期：
 2. **规划** (`propose-plan`) - 将需求转化为可执行计划
 3. **校验** (`plan-check`) - 确保计划引用正确约束文档
 4. **同步** (`sync`) - 将代码重大变更同步到文档
-5. **脱水** (`distill`) - 默认通过规则提炼压缩长文档，也支持可选的宿主模型增强模式
-6. **审计** (`check`) - 对照质量、安全和信仰执行审计
-7. **取证** (`collect-evidence`) - 留存任务执行证据
+5. **多 agent 编排** (`run-agents`) - 按 product spec 与 active exec plan 顺序执行 requirements、plan、implement、verify、pr-summary
+6. **脱水** (`distill`) - 默认通过规则提炼压缩长文档，也支持可选的多 provider 宿主模型增强模式
+7. **审计** (`check`) - 对照质量、安全和信仰执行审计
+8. **取证** (`collect-evidence`) - 留存任务执行证据
 
 ## 📋 版本兼容性
 

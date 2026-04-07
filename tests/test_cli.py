@@ -17,8 +17,14 @@ if str(SRC_PATH) not in sys.path:
 
 import json  # noqa: E402
 
+from harness_commander.application.host_providers import (  # noqa: E402
+    INSTALL_TARGETS,
+    SUPPORTED_PROVIDERS,
+    get_provider_spec,
+)
 from harness_commander.application.model_tasks import HostModelError  # noqa: E402
 from harness_commander.cli import main  # noqa: E402
+from harness_commander.domain.models import CommandResult, ResultStatus  # noqa: E402
 from harness_commander.infrastructure import docs as docs_infra  # noqa: E402
 
 
@@ -40,6 +46,38 @@ def create_minimal_repo(root: Path) -> None:
         path = root / relative_path
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
+
+
+def write_provider_config(root: Path, *, default_provider: str, installed: list[str] | None = None) -> None:
+    """写入最小 provider 配置。"""
+
+    config_path = root / ".harness/provider-config.json"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "default_provider": default_provider,
+                "installed_providers": installed or [default_provider],
+                "installation_results": {
+                    default_provider: {
+                        "status": "config_only",
+                        "support_level": "config_only",
+                        "detected": True,
+                        "cli_command": default_provider,
+                        "configured_at": "2026-04-07T00:00:00Z",
+                        "message": "configured in test",
+                    }
+                },
+                "last_resolved_provider": default_provider,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
 
 
 def test_init_command_creates_missing_directories(tmp_path: Path, capsys) -> None:
@@ -331,10 +369,13 @@ def test_distill_extracts_requirements_and_constraints(tmp_path: Path, capsys) -
     assert "- 不得写入明文密钥" in content
 
 
-def test_distill_host_model_mode_uses_structured_output(tmp_path: Path, capsys) -> None:
-    """distill 在 host-model 模式下应消费宿主模型结构化结果。"""
+def test_distill_host_model_mode_uses_configured_provider_by_default(
+    tmp_path: Path, capsys
+) -> None:
+    """distill 在 host-model 模式下默认应读取已配置 provider。"""
 
     create_minimal_repo(tmp_path)
+    write_provider_config(tmp_path, default_provider="codex")
     source_file = tmp_path / "requirements.md"
     source_file.write_text("# 任意文档\n\n原始内容。\n", encoding="utf-8")
 
@@ -346,7 +387,7 @@ def test_distill_host_model_mode_uses_structured_output(tmp_path: Path, capsys) 
             "limits": ["仅支持邮箱注册"],
             "prohibitions": ["不得跳过风控校验"],
         },
-    ):
+    ) as mocked_distill:
         exit_code = main(
             [
                 "-p",
@@ -365,7 +406,11 @@ def test_distill_host_model_mode_uses_structured_output(tmp_path: Path, capsys) 
     assert payload["status"] == "success"
     assert payload["meta"]["distill_mode"] == "host-model"
     assert payload["meta"]["extraction_source"] == "host-model"
-    assert payload["meta"]["model_provider"] == "claude-cli"
+    assert payload["meta"]["model_provider"] == "codex-cli"
+    assert payload["meta"]["provider"] == "codex"
+    assert payload["meta"]["provider_source"] == "default_provider"
+    assert payload["meta"]["supported_providers"] == list(SUPPORTED_PROVIDERS)
+    assert mocked_distill.call_args.kwargs["provider"] == "codex"
     target_path = Path(payload["meta"]["target_path"])
     content = target_path.read_text(encoding="utf-8")
     assert "- 提升新用户完成率" in content
@@ -379,6 +424,7 @@ def test_distill_auto_mode_falls_back_to_heuristic_when_host_model_fails(
     """auto 模式在宿主模型失败时应回退到 heuristic。"""
 
     create_minimal_repo(tmp_path)
+    write_provider_config(tmp_path, default_provider="claude")
     source_file = tmp_path / "requirements.md"
     source_file.write_text(
         "# 需求\n\n## 业务目标\n构建测试系统\n\n## 核心需求\n1. 用户管理\n",
@@ -409,6 +455,232 @@ def test_distill_auto_mode_falls_back_to_heuristic_when_host_model_fails(
     assert payload["meta"]["fallback_from"] == "host-model"
     warning_codes = [warning["code"] for warning in payload["warnings"]]
     assert "distill_fallback_to_heuristic" in warning_codes
+
+
+def test_distill_provider_override_takes_precedence_over_config(
+    tmp_path: Path, capsys
+) -> None:
+    """distill 显式 --provider 应覆盖默认配置。"""
+
+    create_minimal_repo(tmp_path)
+    write_provider_config(tmp_path, default_provider="claude")
+    source_file = tmp_path / "requirements.md"
+    source_file.write_text("# 任意文档\n\n原始内容。\n", encoding="utf-8")
+
+    with patch(
+        "harness_commander.application.commands.distill_with_host_model",
+        return_value={
+            "goals": ["支持更多宿主工具"],
+            "rules": ["必须保持统一结果协议"],
+            "limits": ["首版采用顺序阶段编排"],
+            "prohibitions": ["不得伪造验证通过"],
+        },
+    ) as mocked_distill:
+        exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "--json",
+                "distill",
+                str(source_file),
+                "--mode",
+                "host-model",
+                "--provider",
+                "codex",
+            ]
+        )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert payload["meta"]["provider"] == "codex"
+    assert payload["meta"]["provider_source"] == "override"
+    assert payload["meta"]["model_provider"] == "codex-cli"
+    assert mocked_distill.call_args.kwargs["provider"] == "codex"
+
+
+def test_distill_host_model_requires_configured_provider_when_not_overridden(
+    tmp_path: Path, capsys
+) -> None:
+    """distill host-model 在无配置且无 override 时应失败。"""
+
+    create_minimal_repo(tmp_path)
+    source_file = tmp_path / "requirements.md"
+    source_file.write_text("# 任意文档\n\n原始内容。\n", encoding="utf-8")
+
+    exit_code = main(
+        [
+            "-p",
+            str(tmp_path),
+            "--json",
+            "distill",
+            str(source_file),
+            "--mode",
+            "host-model",
+        ]
+    )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 1
+    assert payload["status"] == "failure"
+    assert payload["errors"][0]["code"] == "provider_not_configured"
+
+
+
+def test_run_agents_blocks_pr_summary_when_verify_is_missing(
+    tmp_path: Path, capsys
+) -> None:
+    """run-agents 在缺少验证状态时应阻断 PR 摘要生成。"""
+
+    create_minimal_repo(tmp_path)
+    write_provider_config(tmp_path, default_provider="cursor")
+    spec_file = tmp_path / "docs/product-specs/sample.md"
+    spec_file.write_text(
+        "# 样例规格\n\n## 业务目标\n- 支持多宿主工具\n\n## 核心逻辑\n- 保持统一协议\n\n## 验收标准\n- 生成阶段摘要\n",
+        encoding="utf-8",
+    )
+    plan_file = tmp_path / "docs/exec-plans/active/sample.md"
+    plan_file.parent.mkdir(parents=True, exist_ok=True)
+    plan_file.write_text(
+        "# 样例计划\n\n## Goal\n- 完成编排\n\n## Context\n- 样例上下文\n\n## Business Logic\n- 按阶段执行\n\n## Scope\n- requirements\n- plan\n\n## Acceptance Criteria\n- 可阻断 PR\n\n## Exception Handling\n- 失败要保留状态\n\n## Verification\n- 检查验证状态\n\n## References\n- `ARCHITECTURE.md`\n- `docs/PLANS.md`\n- `docs/product-specs/v1/index.md`\n\n## ULW 1: 编排\n\n### 目标\n- 完成执行\n\n### 涉及范围\n- 读取文档\n\n### 验收标准\n- 输出阶段摘要\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        [
+            "-p",
+            str(tmp_path),
+            "--json",
+            "run-agents",
+            "--spec",
+            str(spec_file),
+            "--plan",
+            str(plan_file),
+        ]
+    )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert payload["status"] == "warning"
+    assert payload["warnings"][0]["code"] == "verify_not_ready_for_pr"
+    assert payload["meta"]["provider"] == "cursor"
+    assert payload["meta"]["provider_source"] == "default_provider"
+    stages = [item["stage"] for item in payload["meta"]["agent_runs"]]
+    assert stages == ["requirements", "plan", "implement", "verify"]
+
+
+def test_run_agents_provider_override_takes_precedence_over_config(
+    tmp_path: Path, capsys
+) -> None:
+    """run-agents 显式 --provider 应覆盖默认配置。"""
+
+    create_minimal_repo(tmp_path)
+    write_provider_config(tmp_path, default_provider="claude")
+    spec_file = tmp_path / "docs/product-specs/sample.md"
+    spec_file.write_text(
+        "# 样例规格\n\n## 业务目标\n- 支持多 agent 编排\n\n## 核心逻辑\n- 验证通过后整理 PR\n\n## 验收标准\n- 产出 PR summary\n",
+        encoding="utf-8",
+    )
+    plan_file = tmp_path / "docs/exec-plans/active/sample.md"
+    plan_file.parent.mkdir(parents=True, exist_ok=True)
+    plan_file.write_text(
+        "# 样例计划\n\n## Goal\n- 完成编排\n\n## Context\n- 样例上下文\n\n## Business Logic\n- 按阶段执行\n\n## Scope\n- requirements\n- verify\n\n## Acceptance Criteria\n- 生成 PR 摘要\n\n## Exception Handling\n- 失败要保留状态\n\n## Verification\n- 检查验证状态\n\n## References\n- `ARCHITECTURE.md`\n- `docs/PLANS.md`\n- `docs/product-specs/v1/index.md`\n\n## ULW 1: 编排\n\n### 目标\n- 完成执行\n\n### 涉及范围\n- 读取文档\n\n### 验收标准\n- 输出阶段摘要\n",
+        encoding="utf-8",
+    )
+    verify_dir = tmp_path / ".claude/tmp"
+    verify_dir.mkdir(parents=True, exist_ok=True)
+    (verify_dir / "last-verify.status").write_text("PASS\n", encoding="utf-8")
+    (verify_dir / "verification-summary.md").write_text(
+        "- pytest 全部通过\n- mypy 全部通过\n", encoding="utf-8"
+    )
+
+    exit_code = main(
+        [
+            "-p",
+            str(tmp_path),
+            "--json",
+            "run-agents",
+            "--spec",
+            str(spec_file),
+            "--plan",
+            str(plan_file),
+            "--provider",
+            "copilot",
+        ]
+    )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert payload["status"] == "success"
+    stages = [item["stage"] for item in payload["meta"]["agent_runs"]]
+    assert stages == ["requirements", "plan", "implement", "verify", "pr-summary"]
+    pr_summary_path = Path(payload["artifacts"][0]["path"])
+    assert pr_summary_path.exists()
+    assert "PR Summary" in pr_summary_path.read_text(encoding="utf-8")
+    assert payload["meta"]["provider"] == "copilot"
+    assert payload["meta"]["provider_source"] == "override"
+
+
+def test_install_provider_cli_dispatches_supported_targets(tmp_path: Path, capsys) -> None:
+    """install-provider 应接受 install target 并透传到命令层。"""
+
+    with patch("harness_commander.cli.run_install_provider") as mocked_run:
+        mocked_run.return_value = CommandResult(
+            command="install-provider",
+            status=ResultStatus.SUCCESS,
+            summary="ok",
+        )
+        exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "install-provider",
+                "--provider",
+                "auto",
+                "--dry-run",
+            ]
+        )
+
+    assert exit_code == 0
+    assert INSTALL_TARGETS == (
+        "claude",
+        "cursor",
+        "codex",
+        "openclaw",
+        "trae",
+        "copilot",
+        "all",
+        "auto",
+    )
+    assert mocked_run.call_args.kwargs["provider"] == "auto"
+    assert mocked_run.call_args.kwargs["dry_run"] is True
+
+
+def test_install_provider_provider_spec_and_summary(tmp_path: Path, capsys) -> None:
+    """install-provider 的 provider 规格与摘要应反映 Claude 真实安装能力。"""
+
+    create_minimal_repo(tmp_path)
+
+    spec = get_provider_spec("claude")
+    assert spec.install_support_level == "fully_supported"
+    assert spec.wrapper_source == "host_templates/claude/harness"
+    assert spec.legacy_project_skill_target == ".claude/skills/harness/SKILL.md"
+
+    exit_code = main(["-p", str(tmp_path), "--json", "install-provider", "--provider", "claude"])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert payload["status"] == "success"
+    assert payload["meta"]["results"]["claude"]["status"] == "installed"
+    assert payload["meta"]["results"]["claude"]["installation_mode"] == "user_skill_copy"
+    assert payload["meta"]["results"]["claude"]["install_attempted"] is True
+    assert payload["meta"]["results"]["claude"]["resolved_target_dir"] is not None
+    assert "1 个已完成真实安装" in payload["summary"]
+
 
 
 def test_check_reports_blocking_issue_with_required_metadata(

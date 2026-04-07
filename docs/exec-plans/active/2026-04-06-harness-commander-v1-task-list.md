@@ -22,3 +22,7 @@
 - 所有写入型命令都覆盖 `--dry-run`
 - 所有命令都覆盖统一 JSON 输出
 - 宿主模型参与点仅出现在产品规格允许的认知型任务中
+- provider 默认解析优先级固定为：override > default_provider > installed_providers
+- 已补充 `install-provider` 的产品/协议/测试/验收文档
+- `install-provider` 本轮实现方向：优先解析并安装到用户本机宿主目录，项目级 `.claude/skills/` 只保留兼容层
+- `auto` / `all` 必须覆盖 Claude、Cursor、Codex、OpenClaw、Trae、Copilot 等宿主，逐项返回探测目录、安装模式与失败原因

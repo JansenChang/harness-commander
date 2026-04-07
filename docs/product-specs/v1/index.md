@@ -13,8 +13,10 @@
 - `plan-check`：`commands/plan-check/product.md` / `commands/plan-check/protocol.md` / `commands/plan-check/testing.md` / `commands/plan-check/acceptance.md`
 - `sync`：`commands/sync/product.md` / `commands/sync/protocol.md` / `commands/sync/testing.md` / `commands/sync/acceptance.md`
 - `distill`：`commands/distill/product.md` / `commands/distill/protocol.md` / `commands/distill/testing.md` / `commands/distill/acceptance.md`
+- `install-provider`：`commands/install-provider/product.md` / `commands/install-provider/protocol.md` / `commands/install-provider/testing.md` / `commands/install-provider/acceptance.md`
 - `check`：`commands/check/product.md` / `commands/check/protocol.md` / `commands/check/testing.md` / `commands/check/acceptance.md`
 - `collect-evidence`：`commands/collect-evidence/product.md` / `commands/collect-evidence/protocol.md` / `commands/collect-evidence/testing.md` / `commands/collect-evidence/acceptance.md`
+- `run-agents`：`commands/run-agents/product.md` / `commands/run-agents/protocol.md` / `commands/run-agents/testing.md` / `commands/run-agents/acceptance.md`
 
 ## 全局约束
 

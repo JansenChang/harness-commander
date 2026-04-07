@@ -30,6 +30,8 @@ Harness-Commander 当前应固定为“分层命令编排架构（Layered Comman
 - 领域层（Domain）负责统一结果协议、消息模型和领域异常
 - 基础设施层（Infrastructure）负责文件系统操作、文档读取/校验、模板资源和时间/路径工具
 - 宿主模型不属于核心业务层；它是可插拔的认知能力提供者，只能在产品允许的命令节点参与
+- 首批宿主工具 provider 为 `cursor`、`claude`、`codex`、`openclaw`、`trae`、`copilot`；provider 差异、安装规格、配置解析与默认 provider 决策应收敛在应用层抽象中
+- `install-provider` 是 provider 安装主路径；应用层需要根据 provider 决定 wrapper 类型（如 `skill` / `command`）、安装范围（`user` / `project`）与安装方式（`copy` / `link`），而不是把所有宿主统一处理成 Claude 风格项目级 skill；其中 Claude user scope 默认目录必须与 Linux 保持一致：Linux/macOS 走 `~/.claude/skills/harness-commander`，Windows 走 `%APPDATA%/Claude/skills/harness-commander`
 
 这是一个适合当前项目阶段的架构，因为：
 
@@ -191,8 +193,13 @@ Harness-Commander 当前应固定为“分层命令编排架构（Layered Comman
 ### 当前已实现
 
 - `distill` 已在 application 层提供显式模式切换：`heuristic` / `host-model` / `auto`
-- 宿主模型接入点固定放在 [src/harness_commander/application/model_tasks.py](src/harness_commander/application/model_tasks.py)
-- `run_distill()` 负责模式选择、fallback、结果归一化和统一 `CommandResult`
+- 宿主模型接入点固定放在 [src/harness_commander/application/model_tasks.py](src/harness_commander/application/model_tasks.py)，provider 差异与安装规格收敛在 `application/host_providers.py`
+- 项目级 provider 配置事实源固定为 `.harness/provider-config.json`，由 application 层解析默认 provider 与运行时 override 优先级
+- `run_distill()` 负责模式选择、provider 解析、fallback、结果归一化和统一 `CommandResult`
+- `run-agents` 负责按 product spec 与 active exec plan 顺序编排 requirements、plan、implement、verify、pr-summary 五阶段，但不把最终状态语义交给宿主工具
+- `install-provider` 是主安装入口；`install-skill.sh` 仅作为 Claude project skill 兼容入口，不再承载 provider 主实现
+- provider 安装抽象应以“canonical CLI + 多宿主 wrapper 模板树”为中心：Claude/Codex/OpenClaw/Trae/Copilot 当前走 `skill` wrapper，Cursor 当前走 `command` wrapper
+- 运行时引用的 provider 模板事实源统一位于 `src/harness_commander/host_templates/`，并作为 package data 分发；不得再依赖 repo root 下的临时模板目录
 
 ### 当前不接模型，但保留扩展位
 
