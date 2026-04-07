@@ -123,6 +123,71 @@ def create_run_agents_inputs(
     return spec_file, plan_file
 
 
+def assert_stage_contracts_shape(
+    payload: dict[str, object], *, expected_stages: list[str]
+) -> list[dict[str, object]]:
+    """断言 run-agents 阶段合同结构稳定。"""
+
+    meta = payload.get("meta")
+    assert isinstance(meta, dict)
+    stage_contracts = meta.get("stage_contracts")
+    assert isinstance(stage_contracts, list)
+    assert [contract.get("stage") for contract in stage_contracts] == expected_stages
+
+    required_keys = {
+        "stage",
+        "status",
+        "inputs",
+        "outputs",
+        "blocking_conditions",
+        "fallback",
+        "artifacts",
+        "host_model_allowed",
+    }
+    for contract in stage_contracts:
+        assert isinstance(contract, dict)
+        assert required_keys.issubset(set(contract.keys()))
+        assert isinstance(contract["inputs"], dict)
+        assert isinstance(contract["outputs"], dict)
+        assert isinstance(contract["blocking_conditions"], list)
+        assert isinstance(contract["fallback"], dict)
+        assert isinstance(contract["artifacts"], list)
+        assert isinstance(contract["host_model_allowed"], bool)
+    return stage_contracts
+
+
+def find_stage_contract(
+    stage_contracts: list[dict[str, object]], stage: str
+) -> dict[str, object]:
+    """从阶段合同中定位指定阶段。"""
+
+    for contract in stage_contracts:
+        if contract.get("stage") == stage:
+            return contract
+    raise AssertionError(f"missing stage contract: {stage}")
+
+
+def stage_has_blocking(stage_contract: dict[str, object]) -> bool:
+    """判断阶段合同是否存在阻断条件命中。"""
+
+    conditions = stage_contract.get("blocking_conditions")
+    assert isinstance(conditions, list)
+    return any(
+        isinstance(condition, dict)
+        and isinstance(condition.get("code"), str)
+        and bool(condition["code"])
+        for condition in conditions
+    )
+
+
+def stage_uses_fallback(stage_contract: dict[str, object]) -> bool:
+    """判断阶段合同是否发生 fallback。"""
+
+    fallback = stage_contract.get("fallback")
+    assert isinstance(fallback, dict)
+    return fallback.get("applied") is True
+
+
 
 def test_init_command_creates_missing_directories(tmp_path: Path, capsys) -> None:
     """init 命令应补齐目录结构与模板文件并返回成功退出码。"""
@@ -618,6 +683,16 @@ def test_run_agents_blocks_pr_summary_when_verify_is_missing(
     stages = [item["stage"] for item in payload["meta"]["agent_runs"]]
     assert stages == ["requirements", "plan", "implement", "verify"]
     assert payload["artifacts"] == []
+    stage_contracts = assert_stage_contracts_shape(
+        payload,
+        expected_stages=["requirements", "plan", "implement", "verify", "pr-summary"],
+    )
+    verify_contract = find_stage_contract(stage_contracts, "verify")
+    pr_summary_contract = find_stage_contract(stage_contracts, "pr-summary")
+    assert verify_contract["status"] == "warning"
+    assert stage_has_blocking(verify_contract)
+    assert pr_summary_contract["status"] == "warning"
+    assert stage_has_blocking(pr_summary_contract)
 
 
 def test_run_agents_provider_override_takes_precedence_over_config(
@@ -661,6 +736,18 @@ def test_run_agents_provider_override_takes_precedence_over_config(
     assert "PR Summary" in pr_summary_path.read_text(encoding="utf-8")
     assert payload["meta"]["provider"] == "copilot"
     assert payload["meta"]["provider_source"] == "override"
+    stage_contracts = assert_stage_contracts_shape(
+        payload,
+        expected_stages=["requirements", "plan", "implement", "verify", "pr-summary"],
+    )
+    verify_contract = find_stage_contract(stage_contracts, "verify")
+    pr_summary_contract = find_stage_contract(stage_contracts, "pr-summary")
+    assert verify_contract["status"] == "success"
+    assert not stage_has_blocking(verify_contract)
+    assert not stage_uses_fallback(verify_contract)
+    assert pr_summary_contract["status"] == "success"
+    assert pr_summary_contract["artifacts"]
+    assert all(contract["host_model_allowed"] is False for contract in stage_contracts)
 
 
 def test_run_agents_fails_when_spec_is_missing(tmp_path: Path, capsys) -> None:
@@ -790,6 +877,16 @@ def test_run_agents_blocks_pr_summary_when_verify_status_is_not_pass(
     stages = [item["stage"] for item in payload["meta"]["agent_runs"]]
     assert stages == ["requirements", "plan", "implement", "verify"]
     assert payload["artifacts"] == []
+    stage_contracts = assert_stage_contracts_shape(
+        payload,
+        expected_stages=["requirements", "plan", "implement", "verify", "pr-summary"],
+    )
+    verify_contract = find_stage_contract(stage_contracts, "verify")
+    pr_summary_contract = find_stage_contract(stage_contracts, "pr-summary")
+    assert verify_contract["status"] == "warning"
+    assert stage_has_blocking(verify_contract)
+    assert pr_summary_contract["status"] == "warning"
+    assert stage_has_blocking(pr_summary_contract)
 
 
 def test_run_agents_dry_run_reports_pr_summary_without_writing_file(
@@ -828,6 +925,16 @@ def test_run_agents_dry_run_reports_pr_summary_without_writing_file(
     assert not pr_summary_path.exists()
     stages = [item["stage"] for item in payload["meta"]["agent_runs"]]
     assert stages == ["requirements", "plan", "implement", "verify", "pr-summary"]
+    stage_contracts = assert_stage_contracts_shape(
+        payload,
+        expected_stages=["requirements", "plan", "implement", "verify", "pr-summary"],
+    )
+    verify_contract = find_stage_contract(stage_contracts, "verify")
+    pr_summary_contract = find_stage_contract(stage_contracts, "pr-summary")
+    assert verify_contract["status"] == "success"
+    assert not stage_has_blocking(verify_contract)
+    assert pr_summary_contract["status"] == "success"
+    assert not stage_uses_fallback(pr_summary_contract)
 
 
 def test_install_provider_cli_dispatches_supported_targets(tmp_path: Path, capsys) -> None:

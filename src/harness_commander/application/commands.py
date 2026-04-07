@@ -1123,6 +1123,9 @@ def run_run_agents(
         provider=normalized_provider,
     )
     verify_stage = _build_verify_stage(root)
+    verify_details = verify_stage.get("details", {})
+    verify_summary_text = str(verify_details.get("summary", "")).strip()
+    verify_summary_missing = verify_stage["status"] == "success" and not verify_summary_text
 
     agent_runs = [
         {
@@ -1145,6 +1148,96 @@ def run_run_agents(
         },
         verify_stage,
     ]
+    stage_contracts = [
+        {
+            "stage": "requirements",
+            "status": "success",
+            "inputs": {
+                "spec_path": str(spec_file),
+                "spec_title": parsed_spec.title,
+            },
+            "outputs": {
+                "requirements_summary": requirements_summary,
+            },
+            "blocking_conditions": [],
+            "fallback": {
+                "applied": False,
+                "reason": None,
+                "from": None,
+                "to": None,
+            },
+            "artifacts": [],
+            "host_model_allowed": False,
+        },
+        {
+            "stage": "plan",
+            "status": "success",
+            "inputs": {
+                "plan_path": str(plan_file),
+                "plan_title": parsed_plan.title,
+            },
+            "outputs": {
+                "plan_summary": plan_summary,
+                "ulw_count": len(parsed_plan.ulws),
+            },
+            "blocking_conditions": [],
+            "fallback": {
+                "applied": False,
+                "reason": None,
+                "from": None,
+                "to": None,
+            },
+            "artifacts": [],
+            "host_model_allowed": False,
+        },
+        {
+            "stage": "implement",
+            "status": "success",
+            "inputs": {
+                "requirements_summary": requirements_summary,
+                "plan_summary": plan_summary,
+                "provider": normalized_provider,
+            },
+            "outputs": {
+                "implement_summary": implement_summary,
+            },
+            "blocking_conditions": [],
+            "fallback": {
+                "applied": False,
+                "reason": None,
+                "from": None,
+                "to": None,
+            },
+            "artifacts": [],
+            "host_model_allowed": False,
+        },
+        {
+            "stage": "verify",
+            "status": verify_stage["status"],
+            "inputs": {
+                "status_path": str(verify_details.get("status_path", "")),
+                "summary_path": str(verify_details.get("summary_path", "")),
+            },
+            "outputs": {
+                "verify_status": str(verify_details.get("verify_status", "missing")),
+                "summary": verify_summary_text,
+            },
+            "blocking_conditions": (
+                [
+                    {
+                        "code": "verify_not_ready_for_pr",
+                        "message": "验证尚未通过，PR 摘要阶段被阻断。",
+                        "blocked": True,
+                    }
+                ]
+                if verify_stage["status"] != "success"
+                else []
+            ),
+            "fallback": dict(verify_stage.get("fallback", {})),
+            "artifacts": [],
+            "host_model_allowed": False,
+        },
+    ]
 
     artifacts: list[CommandArtifact] = []
     warnings: list[CommandMessage] = []
@@ -1159,6 +1252,37 @@ def run_run_agents(
                 detail={"verify_status": verify_stage["status"]},
             )
         )
+        stage_contracts.append(
+            {
+                "stage": "pr-summary",
+                "status": "warning",
+                "inputs": {
+                    "spec_title": parsed_spec.title,
+                    "plan_title": parsed_plan.title,
+                    "provider": normalized_provider,
+                    "verify_status": verify_stage["status"],
+                },
+                "outputs": {
+                    "generated": False,
+                    "artifact_path": None,
+                },
+                "blocking_conditions": [
+                    {
+                        "code": "verify_not_ready_for_pr",
+                        "message": "验证尚未通过，已阻断 PR 摘要整理阶段。",
+                        "blocked": True,
+                    }
+                ],
+                "fallback": {
+                    "applied": False,
+                    "reason": None,
+                    "from": None,
+                    "to": None,
+                },
+                "artifacts": [],
+                "host_model_allowed": False,
+            }
+        )
         status = ResultStatus.WARNING
         summary = "多 agent 阶段编排完成，但验证未通过，PR 摘要未生成。"
     else:
@@ -1168,7 +1292,7 @@ def run_run_agents(
             plan_title=parsed_plan.title,
             provider=normalized_provider,
             agent_runs=agent_runs,
-            verification_summary=str(verify_stage.get("details", {}).get("summary", "")).strip(),
+            verification_summary=verify_summary_text,
         )
         artifact = write_text(pr_summary_path, pr_summary_content, dry_run=dry_run, overwrite=False)
         artifacts.append(artifact)
@@ -1179,6 +1303,46 @@ def run_run_agents(
                 "status": "success",
                 "summary": f"已整理 PR 摘要：{pr_summary_path}",
                 "artifact_path": str(pr_summary_path),
+            }
+        )
+        stage_contracts.append(
+            {
+                "stage": "pr-summary",
+                "status": "success",
+                "inputs": {
+                    "spec_title": parsed_spec.title,
+                    "plan_title": parsed_plan.title,
+                    "provider": normalized_provider,
+                    "verify_status": verify_stage["status"],
+                },
+                "outputs": {
+                    "generated": True,
+                    "artifact_path": str(pr_summary_path),
+                    "verification_summary_used": bool(verify_summary_text),
+                },
+                "blocking_conditions": [],
+                "fallback": {
+                    "applied": verify_summary_missing,
+                    "reason": (
+                        "verification_summary_missing"
+                        if verify_summary_missing
+                        else None
+                    ),
+                    "from": "verification-summary-file",
+                    "to": (
+                        "inline_placeholder_text"
+                        if verify_summary_missing
+                        else "verification-summary-file"
+                    ),
+                },
+                "artifacts": [
+                    {
+                        "path": str(pr_summary_path),
+                        "kind": "file",
+                        "action": "would_create" if dry_run else "created",
+                    }
+                ],
+                "host_model_allowed": False,
             }
         )
         status = ResultStatus.SUCCESS
@@ -1199,6 +1363,7 @@ def run_run_agents(
             "provider_source": provider_source,
             "supported_providers": list(SUPPORTED_PROVIDERS),
             "agent_runs": agent_runs,
+            "stage_contracts": stage_contracts,
             "dry_run": dry_run,
         },
     )
@@ -1254,7 +1419,18 @@ def _build_verify_stage(root: Path) -> dict[str, Any]:
             "stage": "verify",
             "status": "warning",
             "summary": "未找到验证状态文件。",
-            "details": {"status_path": str(status_path), "summary": ""},
+            "details": {
+                "status_path": str(status_path),
+                "summary_path": str(summary_path),
+                "verify_status": "missing",
+                "summary": "",
+            },
+            "fallback": {
+                "applied": False,
+                "reason": None,
+                "from": None,
+                "to": None,
+            },
         }
 
     verify_status = status_path.read_text(encoding="utf-8").strip().lower() or "unknown"
@@ -1268,7 +1444,22 @@ def _build_verify_stage(root: Path) -> dict[str, Any]:
         "details": {
             "status_path": str(status_path),
             "summary_path": str(summary_path),
+            "verify_status": verify_status,
             "summary": verification_summary,
+        },
+        "fallback": {
+            "applied": verify_status == "pass" and not verification_summary,
+            "reason": (
+                "verification_summary_missing"
+                if verify_status == "pass" and not verification_summary
+                else None
+            ),
+            "from": "verification-summary-file",
+            "to": (
+                "inline_placeholder_text"
+                if verify_status == "pass" and not verification_summary
+                else "verification-summary-file"
+            ),
         },
     }
 

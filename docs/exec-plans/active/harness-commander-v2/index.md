@@ -10,14 +10,15 @@
 
 - 状态：active
 - 当前主计划：`product-planning.md`
-- 当前阶段：产品问题陈述、宿主模型边界、最小闭环与阶段合同收敛
+- 当前阶段：`run-agents` 阶段合同实现与 V2 最小闭环第一轮落地
 
 ## 下一步
 
-- 先完成 V2 产品问题收敛
-- 再为最小闭环创建命令级执行计划
-- 当前优先命令：`run-agents`、`distill`、`check`
+- 先完成 `run-agents` 阶段合同实现
+- 再基于稳定合同规划 `check` / `distill` 接入
+- 当前优先命令：`run-agents`
 
 ## 计划入口
 
 - `product-planning.md`
+- `run-agents-stage-contracts.md`

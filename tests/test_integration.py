@@ -104,6 +104,71 @@ def create_run_agents_inputs(
     return spec_file, plan_file
 
 
+def assert_stage_contracts_shape(
+    payload: dict[str, object], *, expected_stages: list[str]
+) -> list[dict[str, object]]:
+    """断言 run-agents 阶段合同结构稳定。"""
+
+    meta = payload.get("meta")
+    assert isinstance(meta, dict)
+    stage_contracts = meta.get("stage_contracts")
+    assert isinstance(stage_contracts, list)
+    assert [contract.get("stage") for contract in stage_contracts] == expected_stages
+
+    required_keys = {
+        "stage",
+        "status",
+        "inputs",
+        "outputs",
+        "blocking_conditions",
+        "fallback",
+        "artifacts",
+        "host_model_allowed",
+    }
+    for contract in stage_contracts:
+        assert isinstance(contract, dict)
+        assert required_keys.issubset(set(contract.keys()))
+        assert isinstance(contract["inputs"], dict)
+        assert isinstance(contract["outputs"], dict)
+        assert isinstance(contract["blocking_conditions"], list)
+        assert isinstance(contract["fallback"], dict)
+        assert isinstance(contract["artifacts"], list)
+        assert isinstance(contract["host_model_allowed"], bool)
+    return stage_contracts
+
+
+def find_stage_contract(
+    stage_contracts: list[dict[str, object]], stage: str
+) -> dict[str, object]:
+    """从阶段合同中定位指定阶段。"""
+
+    for contract in stage_contracts:
+        if contract.get("stage") == stage:
+            return contract
+    raise AssertionError(f"missing stage contract: {stage}")
+
+
+def stage_has_blocking(stage_contract: dict[str, object]) -> bool:
+    """判断阶段合同是否存在阻断条件命中。"""
+
+    conditions = stage_contract.get("blocking_conditions")
+    assert isinstance(conditions, list)
+    return any(
+        isinstance(condition, dict)
+        and isinstance(condition.get("code"), str)
+        and bool(condition["code"])
+        for condition in conditions
+    )
+
+
+def stage_uses_fallback(stage_contract: dict[str, object]) -> bool:
+    """判断阶段合同是否发生 fallback。"""
+
+    fallback = stage_contract.get("fallback")
+    assert isinstance(fallback, dict)
+    return fallback.get("applied") is True
+
+
 
 def test_full_workflow_with_dry_run(tmp_path: Path, capsys) -> None:
     """测试完整工作流程（使用 dry-run 模式）。"""
@@ -461,6 +526,16 @@ def test_run_agents_json_contract(tmp_path: Path, capsys) -> None:
     assert result["command"] == "run-agents"
     assert result["meta"]["provider"] == "cursor"
     assert isinstance(result["meta"]["agent_runs"], list)
+    stage_contracts = assert_stage_contracts_shape(
+        result,
+        expected_stages=["requirements", "plan", "implement", "verify", "pr-summary"],
+    )
+    verify_contract = find_stage_contract(stage_contracts, "verify")
+    pr_summary_contract = find_stage_contract(stage_contracts, "pr-summary")
+    assert verify_contract["status"] == "warning"
+    assert stage_has_blocking(verify_contract)
+    assert pr_summary_contract["status"] == "warning"
+    assert stage_has_blocking(pr_summary_contract)
 
 
 def test_run_agents_blocks_pr_summary_for_non_pass_verify_status_integration(
@@ -507,6 +582,16 @@ def test_run_agents_blocks_pr_summary_for_non_pass_verify_status_integration(
         "implement",
         "verify",
     ]
+    stage_contracts = assert_stage_contracts_shape(
+        payload,
+        expected_stages=["requirements", "plan", "implement", "verify", "pr-summary"],
+    )
+    verify_contract = find_stage_contract(stage_contracts, "verify")
+    pr_summary_contract = find_stage_contract(stage_contracts, "pr-summary")
+    assert verify_contract["status"] == "warning"
+    assert stage_has_blocking(verify_contract)
+    assert pr_summary_contract["status"] == "warning"
+    assert stage_has_blocking(pr_summary_contract)
 
 
 def test_run_agents_generates_fallback_verification_block_when_summary_is_missing(
@@ -544,6 +629,15 @@ def test_run_agents_generates_fallback_verification_block_when_summary_is_missin
     pr_summary_path = Path(payload["artifacts"][0]["path"])
     content = pr_summary_path.read_text(encoding="utf-8")
     assert "验证摘要文件存在但为空，请人工补充。" in content
+    stage_contracts = assert_stage_contracts_shape(
+        payload,
+        expected_stages=["requirements", "plan", "implement", "verify", "pr-summary"],
+    )
+    verify_contract = find_stage_contract(stage_contracts, "verify")
+    pr_summary_contract = find_stage_contract(stage_contracts, "pr-summary")
+    assert verify_contract["status"] == "success"
+    assert stage_uses_fallback(verify_contract)
+    assert stage_uses_fallback(pr_summary_contract)
 
 
 def test_run_agents_avoids_overwriting_existing_pr_summary_file(
@@ -594,6 +688,18 @@ def test_run_agents_avoids_overwriting_existing_pr_summary_file(
     assert new_path != existing_path
     assert new_path.exists()
     assert existing_path.read_text(encoding="utf-8") == "# existing summary\n"
+    stage_contracts = assert_stage_contracts_shape(
+        payload,
+        expected_stages=["requirements", "plan", "implement", "verify", "pr-summary"],
+    )
+    verify_contract = find_stage_contract(stage_contracts, "verify")
+    pr_summary_contract = find_stage_contract(stage_contracts, "pr-summary")
+    assert verify_contract["status"] == "success"
+    assert not stage_has_blocking(verify_contract)
+    assert not stage_uses_fallback(verify_contract)
+    assert pr_summary_contract["status"] == "success"
+    assert not stage_uses_fallback(pr_summary_contract)
+    assert pr_summary_contract["artifacts"]
 
 
 def test_check_reports_unquantified_rule_sources_in_summary(

@@ -1,27 +1,90 @@
-# V2 `run-agents` 协议草案
+# V2 `run-agents` 协议定义
 
 ## 当前状态
 
-- draft
+- active（Phase 1）
 
-## 阶段合同（V2 必须补齐）
+## 结果协议总览
 
-每个阶段都必须定义：
+- 命令结果保留兼容字段：`meta.agent_runs`
+- 命令结果新增结构化字段：`meta.stage_contracts`
+- 两者必须指向同一执行事实，不允许出现文本与结构化字段漂移
 
-- 输入
-- 输出
-- 阻断条件
-- fallback
-- 产物
-- 是否允许宿主模型参加
+## 阶段合同字段（最小集）
 
-## 当前方向
+每个阶段必须输出以下字段：
 
-- `requirements`
-  - 后续阶段允许默认优先宿主模型
-- `plan`
-  - 后续阶段允许默认优先宿主模型
-- `verify`
-  - 不允许宿主模型决定是否通过
-- `pr-summary`
-  - 可做增强，但不能决定阻断逻辑
+- `stage`: 阶段名
+- `status`: `success` / `warning` / `failure`
+- `inputs`: 阶段输入来源与关键参数
+- `outputs`: 阶段输出摘要与关键结构
+- `blocking_conditions`: 阶段阻断条件及命中状态
+- `fallback`: 是否 fallback、fallback 来源与原因
+- `artifacts`: 阶段产物列表（路径、类型、动作）
+- `host_model_allowed`: 当前阶段是否允许宿主模型参与
+
+## 当前阶段定义（deterministic baseline）
+
+### `requirements`
+
+- `host_model_allowed`: `false`
+- 输入：spec 解析结果
+- 阻断：spec 文件缺失 -> 命令级 `failure`
+- fallback：无
+- 产物：无
+
+### `plan`
+
+- `host_model_allowed`: `false`
+- 输入：active plan 解析结果 + 治理校验结果
+- 阻断：plan 缺失 / plan 校验不通过 -> 命令级 `failure`
+- fallback：无
+- 产物：无
+
+### `implement`
+
+- `host_model_allowed`: `false`
+- 输入：requirements 与 plan 阶段摘要
+- 阻断：无硬阻断（当前仅摘要承接）
+- fallback：无
+- 产物：无
+
+### `verify`
+
+- `host_model_allowed`: `false`
+- 输入：`.claude/tmp/last-verify.status`、`.claude/tmp/verification-summary.md`
+- 阻断：
+  - `last-verify.status` 缺失 -> `warning`，阻断 `pr-summary`
+  - verify 状态非 PASS -> `warning`，阻断 `pr-summary`
+- fallback：
+  - verification summary 缺失或为空 -> fallback 摘要文案
+- 产物：无
+
+### `pr-summary`
+
+- `host_model_allowed`: `false`
+- 进入条件：`verify.status == success`
+- 阻断：verify 未通过或未就绪
+- fallback：无
+- 产物：`docs/generated/pr-summary/*.md`（dry-run 为 would_create）
+
+## 宿主模型边界（本轮）
+
+- 本轮所有阶段 `host_model_allowed=false`。
+- 后续仅 `requirements` / `plan` 可评估开启宿主模型主路径。
+- 即使后续开启，以下能力继续禁止模型接管：
+  - verify 通过判断
+  - 阻断逻辑
+  - 最终状态
+  - 产物路径与命名
+
+## 失败与回退语义
+
+- 命令级 `failure`：
+  - spec 缺失
+  - plan 缺失
+  - plan 校验失败
+- 命令级 `warning`：
+  - verify 缺失或非 PASS，`pr-summary` 阶段被阻断
+- fallback 语义：
+  - verify summary 缺失时，必须保留 fallback 事实，不得伪造完整验证摘要

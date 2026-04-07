@@ -1,0 +1,52 @@
+# Distill Host-Model Reference
+
+Purpose
+- This file is a lightweight AI-readable reference for the `distill` command when `--mode host-model` or `--mode auto` is used.
+- It mirrors the stable prompt/schema contract without making code the only source of truth.
+
+Allowed model responsibility
+- Extract only four structured fields from the source content:
+  - goals
+  - rules
+  - limits
+  - prohibitions
+- Return facts only.
+- If information is missing, return an empty array.
+
+Disallowed model responsibility
+- Do not invent facts.
+- Do not choose output paths.
+- Do not decide final command status.
+- Do not hide fallback behavior.
+- Do not add fields outside the schema.
+
+Structured schema
+- type: object
+- required:
+  - goals
+  - rules
+  - limits
+  - prohibitions
+- each field:
+  - type: array
+  - items: string
+- additionalProperties: false
+
+Prompt goals
+- Keep each extracted item short, reusable, and directly grounded in the source.
+- Prefer empty arrays over speculative content.
+- Make the output suitable for later rendering into `*-llms.txt`.
+
+Fallback contract
+- `host-model` mode:
+  - requires configured provider
+  - provider missing -> failure
+- `auto` mode:
+  - try host-model first
+  - if host-model fails, fall back to heuristic extraction
+  - fallback must remain visible in warnings/meta
+
+Related sources
+- `docs/design-docs/distill-host-model-contract.md`
+- `docs/product-specs/v1/commands/distill/protocol.md`
+- `src/harness_commander/application/model_tasks.py`

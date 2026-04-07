@@ -21,8 +21,9 @@
 
 ### 当前阶段
 
-- Harness-Commander V1 的 CLI 主命令集已经落地，本轮执行层实现任务已完成收敛，当前阶段切到“归档执行任务 + 重新审视产品缺陷”。
-- `docs/exec-plans/active/` 当前不再保留命令级执行计划；本轮命令计划快照已统一归档到 `docs/exec-plans/completed/2026-04-07-harness-commander-v1-exec-archive/`。
+- Harness-Commander V1 的 CLI 主命令集已经落地，本轮执行层硬化已归档完成。
+- 项目当前已从“产品缺陷复盘”进入“V2 最小闭环命令级规划 + 第一轮实现”阶段。
+- 当前 active 计划已重新开启，入口位于 `docs/exec-plans/active/harness-commander-v2/`。
 
 ### 命令状态快照
 
@@ -40,18 +41,23 @@
 
 ### 当前重点
 
-- 归档本轮执行层任务，冻结当前实现状态，避免在产品审视前继续滚动实现范围。
-- 重新审视命令设计、结果协议和工作流层面的产品缺陷，决定下一轮是否需要新的 active exec plan。
-- 若重开执行任务，应以产品缺陷清单为输入重新生成 active 计划，而不是继续复用本轮硬化计划。
+- 以 `run-agents` 为主入口启动 V2 第一轮实现，优先把阶段合同从文档约束落到 runtime 结果协议。
+- 保持默认不依赖宿主模型，先收敛 deterministic baseline，再为后续宿主模型主路径留出结构化边界。
+- 在不扩大 runtime 范围的前提下，优先补齐：
+  - 阶段输入 / 输出 / 阻断条件 / fallback / 产物 / 宿主模型参与字段
+  - `run-agents` 对应 CLI / integration 覆盖
+  - V2 `run-agents` 产品、协议、测试、验收文档
 
 ### 当前阻塞与风险
 
 - 2026-04-07 本地执行 `pytest` 的结果已恢复为：`67 passed`。
 - `install-provider` 相关阻塞已收敛：acceptance 改为临时虚拟环境自举 editable install，CLI 测试不再写真实用户目录，并对权限失败返回稳定结果合同。
 - `run-agents` 已补齐 verify 缺失 / 非 PASS 阻断、dry-run PR summary、不覆盖已有 PR summary、verification summary 缺失 fallback 等测试覆盖；剩余风险主要转向 `check` / `distill` 的集成级失败路径补齐。
-- 当前主要风险不再是执行稳定性，而是产品缺陷尚未系统复盘；如果继续直接补实现，容易在错误产品边界上做局部优化。
+- 当前主要风险已从“产品问题未定义”收敛到“V2 阶段合同尚未进入代码”；如果继续只靠摘要阶段推进，后续恢复、重试和宿主模型边界会继续漂浮。
 
 ### 当前 active 入口
 
-- 当前无 active 执行计划。
+- V2 active 索引：`docs/exec-plans/active/harness-commander-v2/index.md`
+- 当前主计划：`docs/exec-plans/active/harness-commander-v2/product-planning.md`
+- 当前命令级执行计划：`docs/exec-plans/active/harness-commander-v2/run-agents-stage-contracts.md`
 - 已归档入口：`docs/exec-plans/completed/2026-04-07-harness-commander-v1-exec-archive.md`

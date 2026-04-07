@@ -112,6 +112,18 @@
 - 检查最小闭环、宿主模型边界、非目标范围是否已落到仓库事实源
 - 检查是否仍存在“对话中已确认、仓库中未记录”的关键产品决策
 
+## 当前落实状态
+
+- 已完成：
+  - V2 总问题陈述
+  - 宿主模型边界
+  - 最小闭环和配角命令定位
+- 已启动：
+  - `run-agents` 命令级执行计划：`run-agents-stage-contracts.md`
+- 当前选择：
+  - 先落阶段合同，不直接扩展更大 runtime
+  - 先锁 deterministic baseline，再规划 `check` / `distill` 接入
+
 ## References
 
 - `AGENTS.md`
