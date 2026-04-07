@@ -10,13 +10,13 @@
 
 - 状态：active
 - 当前主计划：`product-planning.md`
-- 当前阶段：`distill` 来源映射最小切片实现
+- 当前阶段：`run-agents` 接入 `check` 治理前置门
 
 ## 下一步
 
-- 先完成 `distill` 的 extraction report 与来源映射
-- 再评估增量 distill 与更复杂 schema
-- 当前优先命令：`distill`
+- 先完成 `run-agents` 的治理前置门接入
+- 再评估 warning 是否升级为更强门禁
+- 当前优先命令：`run-agents`
 
 ## 计划入口
 
@@ -24,3 +24,4 @@
 - `run-agents-stage-contracts.md`
 - `check-governance-entry.md`
 - `distill-source-mapping.md`
+- `run-agents-check-preflight.md`

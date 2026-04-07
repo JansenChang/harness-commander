@@ -12,7 +12,11 @@
 
 ## 当前实现切片（Phase 1）
 
-- 顺序阶段保持：`requirements -> plan -> implement -> verify -> pr-summary`。
+- 顺序阶段升级为：`check -> requirements -> plan -> implement -> verify -> pr-summary`。
+- `check` 作为治理前置门（preflight）：
+  - `check.failure`：阻断后续全部阶段，命令级 `failure`。
+  - `check.warning`：允许继续进入 requirements，但必须在结果中显式留痕。
+  - `check.success`：正常继续。
 - 输出保持兼容：`meta.agent_runs` 继续保留。
 - 新增结构化阶段合同：每个阶段都有统一合同字段，支持后续恢复 / 重试 / 接管。
 - verify 缺失或非 PASS 时必须阻断 `pr-summary`，不允许伪造成功。
@@ -42,17 +46,19 @@
 
 ## 与 active exec plan 对齐
 
-- 当前执行计划：`docs/exec-plans/active/harness-commander-v2/run-agents-stage-contracts.md`
+- 当前执行计划：
+  - `docs/exec-plans/active/harness-commander-v2/run-agents-stage-contracts.md`
+  - `docs/exec-plans/active/harness-commander-v2/run-agents-check-preflight.md`
 - 对齐 ULW：
   - ULW 1：阶段合同字段收敛
   - ULW 2：合同进入结果协议且保持兼容
-  - ULW 3：成功 / 失败 / fallback 测试覆盖
-  - ULW 4：为后续 `check` / `distill` 接入留稳定扩展位
+  - ULW 3：覆盖 `check` preflight 三态（failure 阻断 / warning 继续 / success 继续）
+  - ULW 4：为后续强前置门与 `distill` 接入留稳定扩展位
 
 ## 当前非目标
 
 - 不引入并发 agent runtime
-- 不把 `collect-evidence`、`check`、`distill` 强行并入主链执行
+- 不把 `collect-evidence`、`distill` 强行并入主链执行
 - 不在本轮切宿主模型默认主路径
 
 ## 当前开放问题

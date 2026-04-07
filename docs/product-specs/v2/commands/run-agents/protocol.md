@@ -25,6 +25,17 @@
 
 ## 当前阶段定义（deterministic baseline）
 
+### `check`
+
+- `host_model_allowed`: `false`
+- 输入：当前输入计划上下文 + `check` 治理预检执行结果
+- 输出：治理摘要（如 `health_score`、`governance_entry`、`next_actions`）的结构化镜像
+- 阻断：
+  - `check.status=failure` -> 命令级 `failure`，后续阶段不进入
+  - `check` 结果缺失必要治理字段 -> 保守阻断为命令级 `failure`
+- fallback：无
+- 产物：无
+
 ### `requirements`
 
 - `host_model_allowed`: `false`
@@ -81,10 +92,21 @@
 ## 失败与回退语义
 
 - 命令级 `failure`：
+  - `check` 预检失败
+  - `check` 缺失必要治理字段（保守阻断）
   - spec 缺失
   - plan 缺失
   - plan 校验失败
 - 命令级 `warning`：
+  - `check.status=warning`，并继续进入 requirements
   - verify 缺失或非 PASS，`pr-summary` 阶段被阻断
 - fallback 语义：
   - verify summary 缺失时，必须保留 fallback 事实，不得伪造完整验证摘要
+
+## 阶段顺序与门禁规则（本轮）
+
+- 固定顺序：`check -> requirements -> plan -> implement -> verify -> pr-summary`
+- 前置门语义：
+  - `check=failure`：立即结束，`requirements` 及后续阶段不得出现成功执行事实
+  - `check=warning`：继续执行，但 warning 必须进入 `meta.agent_runs` 与 `meta.stage_contracts`
+  - `check=success`：正常继续

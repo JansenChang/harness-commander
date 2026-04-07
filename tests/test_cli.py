@@ -24,7 +24,11 @@ from harness_commander.application.host_providers import (  # noqa: E402
 )
 from harness_commander.application.model_tasks import HostModelError  # noqa: E402
 from harness_commander.cli import main  # noqa: E402
-from harness_commander.domain.models import CommandResult, ResultStatus  # noqa: E402
+from harness_commander.domain.models import (  # noqa: E402
+    CommandMessage,
+    CommandResult,
+    ResultStatus,
+)
 from harness_commander.infrastructure import docs as docs_infra  # noqa: E402
 
 
@@ -186,6 +190,84 @@ def stage_uses_fallback(stage_contract: dict[str, object]) -> bool:
     fallback = stage_contract.get("fallback")
     assert isinstance(fallback, dict)
     return fallback.get("applied") is True
+
+
+def build_check_preflight_result(
+    *,
+    status: ResultStatus,
+    blocking_count: int = 0,
+    warning_count: int = 0,
+    health_score: int = 100,
+    ready_for_run_agents: bool = True,
+) -> CommandResult:
+    """构造 run-agents preflight 使用的 check 结果。"""
+
+    warnings: list[CommandMessage] = []
+    errors: list[CommandMessage] = []
+    if status == ResultStatus.WARNING:
+        warnings.append(
+            CommandMessage(
+                code="check_preflight_warning",
+                message="治理预检存在提醒项，允许继续执行。",
+                location="check",
+            )
+        )
+    elif status == ResultStatus.FAILURE:
+        errors.append(
+            CommandMessage(
+                code="check_preflight_blocked",
+                message="治理预检失败，阻断后续阶段。",
+                location="check",
+            )
+        )
+
+    checks_blocking = [item.to_dict() for item in errors]
+    checks_warnings = [item.to_dict() for item in warnings]
+    return CommandResult(
+        command="check",
+        status=status,
+        summary="mock check preflight result",
+        warnings=warnings,
+        errors=errors,
+        meta={
+            "health_score": health_score,
+            "blocking_count": blocking_count,
+            "warning_count": warning_count,
+            "governance_entry": {
+                "status": (
+                    "blocked"
+                    if status == ResultStatus.FAILURE
+                    else "needs_attention"
+                    if status == ResultStatus.WARNING
+                    else "ready"
+                ),
+                "ready_for_run_agents": ready_for_run_agents,
+                "no_warning": status == ResultStatus.SUCCESS and warning_count == 0,
+                "recommended_entrypoint": (
+                    "harness run-agents"
+                    if ready_for_run_agents
+                    else "harness check"
+                ),
+            },
+            "next_actions": [
+                {
+                    "code": "mock_action",
+                    "title": "mock action",
+                    "summary": "mock summary",
+                    "recommended_command": "harness check",
+                }
+            ],
+            "checks": {
+                "blocking": checks_blocking,
+                "warnings": checks_warnings,
+                "all": [*checks_blocking, *checks_warnings],
+            },
+            "checked_targets": {
+                "plan_files": ["docs/exec-plans/active/sample.md"],
+                "generated_files": [],
+            },
+        },
+    )
 
 
 
@@ -724,6 +806,182 @@ def test_distill_host_model_requires_configured_provider_when_not_overridden(
     assert payload["errors"][0]["code"] == "provider_not_configured"
 
 
+def test_run_agents_fails_and_stops_before_requirements_when_check_preflight_fails(
+    tmp_path: Path, capsys
+) -> None:
+    """check preflight failure 时，run-agents 应阻断且不进入 requirements。"""
+
+    create_minimal_repo(tmp_path)
+    write_provider_config(tmp_path, default_provider="claude")
+    spec_file, plan_file = create_run_agents_inputs(tmp_path)
+
+    with patch(
+        "harness_commander.application.commands.run_check",
+        return_value=build_check_preflight_result(
+            status=ResultStatus.FAILURE,
+            blocking_count=1,
+            warning_count=0,
+            health_score=35,
+            ready_for_run_agents=False,
+        ),
+    ) as mocked_check:
+        exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "--json",
+                "run-agents",
+                "--spec",
+                str(spec_file),
+                "--plan",
+                str(plan_file),
+            ]
+        )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 1
+    assert payload["status"] == "failure"
+    assert mocked_check.call_count == 1
+    stages = [item["stage"] for item in payload["meta"]["agent_runs"]]
+    assert stages == ["check"]
+    assert "requirements" not in stages
+    stage_contracts = assert_stage_contracts_shape(payload, expected_stages=["check"])
+    check_contract = find_stage_contract(stage_contracts, "check")
+    assert check_contract["status"] == "failure"
+    assert stage_has_blocking(check_contract)
+    outputs = check_contract["outputs"]
+    assert outputs["health_score"] == 35
+    assert outputs["governance_entry"]["ready_for_run_agents"] is False
+
+
+def test_run_agents_continues_with_check_warning_and_records_preflight_stage(
+    tmp_path: Path, capsys
+) -> None:
+    """check preflight warning 时，run-agents 应继续并在结果中留痕。"""
+
+    create_minimal_repo(tmp_path)
+    write_provider_config(tmp_path, default_provider="cursor")
+    spec_file, plan_file = create_run_agents_inputs(tmp_path)
+    verify_dir = tmp_path / ".claude/tmp"
+    verify_dir.mkdir(parents=True, exist_ok=True)
+    (verify_dir / "last-verify.status").write_text("PASS\n", encoding="utf-8")
+    (verify_dir / "verification-summary.md").write_text(
+        "- pytest 全部通过\n",
+        encoding="utf-8",
+    )
+
+    with patch(
+        "harness_commander.application.commands.run_check",
+        return_value=build_check_preflight_result(
+            status=ResultStatus.WARNING,
+            blocking_count=0,
+            warning_count=1,
+            health_score=84,
+            ready_for_run_agents=True,
+        ),
+    ):
+        exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "--json",
+                "run-agents",
+                "--spec",
+                str(spec_file),
+                "--plan",
+                str(plan_file),
+            ]
+        )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert payload["status"] == "warning"
+    assert [item["stage"] for item in payload["meta"]["agent_runs"]] == [
+        "check",
+        "requirements",
+        "plan",
+        "implement",
+        "verify",
+        "pr-summary",
+    ]
+    stage_contracts = assert_stage_contracts_shape(
+        payload,
+        expected_stages=["check", "requirements", "plan", "implement", "verify", "pr-summary"],
+    )
+    check_contract = find_stage_contract(stage_contracts, "check")
+    outputs = check_contract["outputs"]
+    assert check_contract["status"] == "warning"
+    assert outputs["health_score"] == 84
+    assert outputs["governance_entry"]["status"] == "needs_attention"
+    assert outputs["governance_entry"]["ready_for_run_agents"] is True
+
+
+def test_run_agents_continues_normally_when_check_preflight_succeeds(
+    tmp_path: Path, capsys
+) -> None:
+    """check preflight success 时，run-agents 应按既有语义继续。"""
+
+    create_minimal_repo(tmp_path)
+    write_provider_config(tmp_path, default_provider="copilot")
+    spec_file, plan_file = create_run_agents_inputs(tmp_path)
+    verify_dir = tmp_path / ".claude/tmp"
+    verify_dir.mkdir(parents=True, exist_ok=True)
+    (verify_dir / "last-verify.status").write_text("PASS\n", encoding="utf-8")
+    (verify_dir / "verification-summary.md").write_text(
+        "- pytest 全部通过\n",
+        encoding="utf-8",
+    )
+
+    with patch(
+        "harness_commander.application.commands.run_check",
+        return_value=build_check_preflight_result(
+            status=ResultStatus.SUCCESS,
+            blocking_count=0,
+            warning_count=0,
+            health_score=100,
+            ready_for_run_agents=True,
+        ),
+    ):
+        exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "--json",
+                "run-agents",
+                "--spec",
+                str(spec_file),
+                "--plan",
+                str(plan_file),
+            ]
+        )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert payload["status"] == "success"
+    assert [item["stage"] for item in payload["meta"]["agent_runs"]] == [
+        "check",
+        "requirements",
+        "plan",
+        "implement",
+        "verify",
+        "pr-summary",
+    ]
+    stage_contracts = assert_stage_contracts_shape(
+        payload,
+        expected_stages=["check", "requirements", "plan", "implement", "verify", "pr-summary"],
+    )
+    check_contract = find_stage_contract(stage_contracts, "check")
+    verify_contract = find_stage_contract(stage_contracts, "verify")
+    pr_summary_contract = find_stage_contract(stage_contracts, "pr-summary")
+    assert check_contract["status"] == "success"
+    assert verify_contract["status"] == "success"
+    assert not stage_has_blocking(verify_contract)
+    assert pr_summary_contract["status"] == "success"
+
+
 
 def test_run_agents_blocks_pr_summary_when_verify_is_missing(
     tmp_path: Path, capsys
@@ -748,18 +1006,22 @@ def test_run_agents_blocks_pr_summary_when_verify_is_missing(
         ),
     )
 
-    exit_code = main(
-        [
-            "-p",
-            str(tmp_path),
-            "--json",
-            "run-agents",
-            "--spec",
-            str(spec_file),
-            "--plan",
-            str(plan_file),
-        ]
-    )
+    with patch(
+        "harness_commander.application.commands.run_check",
+        return_value=build_check_preflight_result(status=ResultStatus.SUCCESS),
+    ):
+        exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "--json",
+                "run-agents",
+                "--spec",
+                str(spec_file),
+                "--plan",
+                str(plan_file),
+            ]
+        )
     captured = capsys.readouterr()
     payload = json.loads(captured.out)
 
@@ -769,14 +1031,16 @@ def test_run_agents_blocks_pr_summary_when_verify_is_missing(
     assert payload["meta"]["provider"] == "cursor"
     assert payload["meta"]["provider_source"] == "default_provider"
     stages = [item["stage"] for item in payload["meta"]["agent_runs"]]
-    assert stages == ["requirements", "plan", "implement", "verify"]
+    assert stages == ["check", "requirements", "plan", "implement", "verify"]
     assert payload["artifacts"] == []
     stage_contracts = assert_stage_contracts_shape(
         payload,
-        expected_stages=["requirements", "plan", "implement", "verify", "pr-summary"],
+        expected_stages=["check", "requirements", "plan", "implement", "verify", "pr-summary"],
     )
+    check_contract = find_stage_contract(stage_contracts, "check")
     verify_contract = find_stage_contract(stage_contracts, "verify")
     pr_summary_contract = find_stage_contract(stage_contracts, "pr-summary")
+    assert check_contract["status"] == "success"
     assert verify_contract["status"] == "warning"
     assert stage_has_blocking(verify_contract)
     assert pr_summary_contract["status"] == "warning"
@@ -798,27 +1062,31 @@ def test_run_agents_provider_override_takes_precedence_over_config(
         "- pytest 全部通过\n- mypy 全部通过\n", encoding="utf-8"
     )
 
-    exit_code = main(
-        [
-            "-p",
-            str(tmp_path),
-            "--json",
-            "run-agents",
-            "--spec",
-            str(spec_file),
-            "--plan",
-            str(plan_file),
-            "--provider",
-            "copilot",
-        ]
-    )
+    with patch(
+        "harness_commander.application.commands.run_check",
+        return_value=build_check_preflight_result(status=ResultStatus.SUCCESS),
+    ):
+        exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "--json",
+                "run-agents",
+                "--spec",
+                str(spec_file),
+                "--plan",
+                str(plan_file),
+                "--provider",
+                "copilot",
+            ]
+        )
     captured = capsys.readouterr()
     payload = json.loads(captured.out)
 
     assert exit_code == 0
     assert payload["status"] == "success"
     stages = [item["stage"] for item in payload["meta"]["agent_runs"]]
-    assert stages == ["requirements", "plan", "implement", "verify", "pr-summary"]
+    assert stages == ["check", "requirements", "plan", "implement", "verify", "pr-summary"]
     pr_summary_path = Path(payload["artifacts"][0]["path"])
     assert pr_summary_path.exists()
     assert "PR Summary" in pr_summary_path.read_text(encoding="utf-8")
@@ -826,10 +1094,12 @@ def test_run_agents_provider_override_takes_precedence_over_config(
     assert payload["meta"]["provider_source"] == "override"
     stage_contracts = assert_stage_contracts_shape(
         payload,
-        expected_stages=["requirements", "plan", "implement", "verify", "pr-summary"],
+        expected_stages=["check", "requirements", "plan", "implement", "verify", "pr-summary"],
     )
+    check_contract = find_stage_contract(stage_contracts, "check")
     verify_contract = find_stage_contract(stage_contracts, "verify")
     pr_summary_contract = find_stage_contract(stage_contracts, "pr-summary")
+    assert check_contract["status"] == "success"
     assert verify_contract["status"] == "success"
     assert not stage_has_blocking(verify_contract)
     assert not stage_uses_fallback(verify_contract)
@@ -846,18 +1116,22 @@ def test_run_agents_fails_when_spec_is_missing(tmp_path: Path, capsys) -> None:
     _, plan_file = create_run_agents_inputs(tmp_path)
     missing_spec = tmp_path / "docs/product-specs/missing.md"
 
-    exit_code = main(
-        [
-            "-p",
-            str(tmp_path),
-            "--json",
-            "run-agents",
-            "--spec",
-            str(missing_spec),
-            "--plan",
-            str(plan_file),
-        ]
-    )
+    with patch(
+        "harness_commander.application.commands.run_check",
+        return_value=build_check_preflight_result(status=ResultStatus.SUCCESS),
+    ):
+        exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "--json",
+                "run-agents",
+                "--spec",
+                str(missing_spec),
+                "--plan",
+                str(plan_file),
+            ]
+        )
     captured = capsys.readouterr()
     payload = json.loads(captured.out)
 
@@ -875,18 +1149,22 @@ def test_run_agents_fails_when_plan_is_missing(tmp_path: Path, capsys) -> None:
     spec_file, _ = create_run_agents_inputs(tmp_path)
     missing_plan = tmp_path / "docs/exec-plans/active/missing.md"
 
-    exit_code = main(
-        [
-            "-p",
-            str(tmp_path),
-            "--json",
-            "run-agents",
-            "--spec",
-            str(spec_file),
-            "--plan",
-            str(missing_plan),
-        ]
-    )
+    with patch(
+        "harness_commander.application.commands.run_check",
+        return_value=build_check_preflight_result(status=ResultStatus.SUCCESS),
+    ):
+        exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "--json",
+                "run-agents",
+                "--spec",
+                str(spec_file),
+                "--plan",
+                str(missing_plan),
+            ]
+        )
     captured = capsys.readouterr()
     payload = json.loads(captured.out)
 
@@ -908,18 +1186,22 @@ def test_run_agents_fails_when_plan_validation_has_blocking_issues(
         plan_content="# 样例计划\n\n## Goal\n- 只有目标，没有引用\n",
     )
 
-    exit_code = main(
-        [
-            "-p",
-            str(tmp_path),
-            "--json",
-            "run-agents",
-            "--spec",
-            str(spec_file),
-            "--plan",
-            str(plan_file),
-        ]
-    )
+    with patch(
+        "harness_commander.application.commands.run_check",
+        return_value=build_check_preflight_result(status=ResultStatus.SUCCESS),
+    ):
+        exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "--json",
+                "run-agents",
+                "--spec",
+                str(spec_file),
+                "--plan",
+                str(plan_file),
+            ]
+        )
     captured = capsys.readouterr()
     payload = json.loads(captured.out)
 
@@ -943,18 +1225,22 @@ def test_run_agents_blocks_pr_summary_when_verify_status_is_not_pass(
     verify_dir.mkdir(parents=True, exist_ok=True)
     (verify_dir / "last-verify.status").write_text("FAIL\n", encoding="utf-8")
 
-    exit_code = main(
-        [
-            "-p",
-            str(tmp_path),
-            "--json",
-            "run-agents",
-            "--spec",
-            str(spec_file),
-            "--plan",
-            str(plan_file),
-        ]
-    )
+    with patch(
+        "harness_commander.application.commands.run_check",
+        return_value=build_check_preflight_result(status=ResultStatus.SUCCESS),
+    ):
+        exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "--json",
+                "run-agents",
+                "--spec",
+                str(spec_file),
+                "--plan",
+                str(plan_file),
+            ]
+        )
     captured = capsys.readouterr()
     payload = json.loads(captured.out)
 
@@ -963,14 +1249,16 @@ def test_run_agents_blocks_pr_summary_when_verify_status_is_not_pass(
     assert payload["warnings"][0]["code"] == "verify_not_ready_for_pr"
     assert payload["warnings"][0]["detail"]["verify_status"] == "warning"
     stages = [item["stage"] for item in payload["meta"]["agent_runs"]]
-    assert stages == ["requirements", "plan", "implement", "verify"]
+    assert stages == ["check", "requirements", "plan", "implement", "verify"]
     assert payload["artifacts"] == []
     stage_contracts = assert_stage_contracts_shape(
         payload,
-        expected_stages=["requirements", "plan", "implement", "verify", "pr-summary"],
+        expected_stages=["check", "requirements", "plan", "implement", "verify", "pr-summary"],
     )
+    check_contract = find_stage_contract(stage_contracts, "check")
     verify_contract = find_stage_contract(stage_contracts, "verify")
     pr_summary_contract = find_stage_contract(stage_contracts, "pr-summary")
+    assert check_contract["status"] == "success"
     assert verify_contract["status"] == "warning"
     assert stage_has_blocking(verify_contract)
     assert pr_summary_contract["status"] == "warning"
@@ -990,19 +1278,23 @@ def test_run_agents_dry_run_reports_pr_summary_without_writing_file(
     (verify_dir / "last-verify.status").write_text("PASS\n", encoding="utf-8")
     (verify_dir / "verification-summary.md").write_text("- pytest 全部通过\n", encoding="utf-8")
 
-    exit_code = main(
-        [
-            "-p",
-            str(tmp_path),
-            "--json",
-            "run-agents",
-            "--spec",
-            str(spec_file),
-            "--plan",
-            str(plan_file),
-            "--dry-run",
-        ]
-    )
+    with patch(
+        "harness_commander.application.commands.run_check",
+        return_value=build_check_preflight_result(status=ResultStatus.SUCCESS),
+    ):
+        exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "--json",
+                "run-agents",
+                "--spec",
+                str(spec_file),
+                "--plan",
+                str(plan_file),
+                "--dry-run",
+            ]
+        )
     captured = capsys.readouterr()
     payload = json.loads(captured.out)
 
@@ -1012,13 +1304,15 @@ def test_run_agents_dry_run_reports_pr_summary_without_writing_file(
     pr_summary_path = Path(payload["artifacts"][0]["path"])
     assert not pr_summary_path.exists()
     stages = [item["stage"] for item in payload["meta"]["agent_runs"]]
-    assert stages == ["requirements", "plan", "implement", "verify", "pr-summary"]
+    assert stages == ["check", "requirements", "plan", "implement", "verify", "pr-summary"]
     stage_contracts = assert_stage_contracts_shape(
         payload,
-        expected_stages=["requirements", "plan", "implement", "verify", "pr-summary"],
+        expected_stages=["check", "requirements", "plan", "implement", "verify", "pr-summary"],
     )
+    check_contract = find_stage_contract(stage_contracts, "check")
     verify_contract = find_stage_contract(stage_contracts, "verify")
     pr_summary_contract = find_stage_contract(stage_contracts, "pr-summary")
+    assert check_contract["status"] == "success"
     assert verify_contract["status"] == "success"
     assert not stage_has_blocking(verify_contract)
     assert pr_summary_contract["status"] == "success"

@@ -8,6 +8,7 @@
 
 - 验证 `run-agents` 阶段合同字段稳定可断言。
 - 保证在新增 `meta.stage_contracts` 的同时保持 `meta.agent_runs` 兼容。
+- 验证 `check` 作为 preflight 前置门的三态语义（failure/warning/success）。
 - 覆盖成功、失败、阻断、fallback 四类关键语义。
 
 ## 分层策略
@@ -22,6 +23,20 @@
   - 校验 fallback 文案与结构化字段一致
 
 ## Phase 1 必测场景
+
+### preflight（`check`）路径
+
+- `check=failure`：
+  - `status=failure`
+  - 后续阶段（`requirements` 起）不进入
+  - `meta.agent_runs` 与 `meta.stage_contracts` 都能看见 `check` 失败事实
+- `check=warning`：
+  - 命令可继续进入 `requirements`
+  - `status` 不因 preflight warning 直接失败
+  - warning 在 `meta.agent_runs` 与 `meta.stage_contracts` 均可追踪
+- `check=success`：
+  - 正常进入后续阶段
+  - 不改变现有 verify / pr-summary 语义
 
 ### 成功路径
 
@@ -70,4 +85,4 @@
 
 - 本轮不测试并发 agent runtime。
 - 本轮不测试宿主模型主路径。
-- 本轮不测试 `check` / `distill` 的联动编排。
+- 本轮不测试 `distill` 的联动编排。

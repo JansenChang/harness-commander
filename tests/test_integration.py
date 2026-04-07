@@ -19,6 +19,11 @@ from unittest.mock import patch  # noqa: E402
 
 from harness_commander.application.model_tasks import HostModelError  # noqa: E402
 from harness_commander.cli import main  # noqa: E402
+from harness_commander.domain.models import (  # noqa: E402
+    CommandMessage,
+    CommandResult,
+    ResultStatus,
+)
 
 
 def write_provider_config(
@@ -210,6 +215,84 @@ def stage_uses_fallback(stage_contract: dict[str, object]) -> bool:
     fallback = stage_contract.get("fallback")
     assert isinstance(fallback, dict)
     return fallback.get("applied") is True
+
+
+def build_check_preflight_result(
+    *,
+    status: ResultStatus,
+    blocking_count: int = 0,
+    warning_count: int = 0,
+    health_score: int = 100,
+    ready_for_run_agents: bool = True,
+) -> CommandResult:
+    """构造 run-agents preflight 使用的 check 结果。"""
+
+    warnings: list[CommandMessage] = []
+    errors: list[CommandMessage] = []
+    if status == ResultStatus.WARNING:
+        warnings.append(
+            CommandMessage(
+                code="check_preflight_warning",
+                message="治理预检存在提醒项，允许继续执行。",
+                location="check",
+            )
+        )
+    elif status == ResultStatus.FAILURE:
+        errors.append(
+            CommandMessage(
+                code="check_preflight_blocked",
+                message="治理预检失败，阻断后续阶段。",
+                location="check",
+            )
+        )
+
+    checks_blocking = [item.to_dict() for item in errors]
+    checks_warnings = [item.to_dict() for item in warnings]
+    return CommandResult(
+        command="check",
+        status=status,
+        summary="mock check preflight result",
+        warnings=warnings,
+        errors=errors,
+        meta={
+            "health_score": health_score,
+            "blocking_count": blocking_count,
+            "warning_count": warning_count,
+            "governance_entry": {
+                "status": (
+                    "blocked"
+                    if status == ResultStatus.FAILURE
+                    else "needs_attention"
+                    if status == ResultStatus.WARNING
+                    else "ready"
+                ),
+                "ready_for_run_agents": ready_for_run_agents,
+                "no_warning": status == ResultStatus.SUCCESS and warning_count == 0,
+                "recommended_entrypoint": (
+                    "harness run-agents"
+                    if ready_for_run_agents
+                    else "harness check"
+                ),
+            },
+            "next_actions": [
+                {
+                    "code": "mock_action",
+                    "title": "mock action",
+                    "summary": "mock summary",
+                    "recommended_command": "harness check",
+                }
+            ],
+            "checks": {
+                "blocking": checks_blocking,
+                "warnings": checks_warnings,
+                "all": [*checks_blocking, *checks_warnings],
+            },
+            "checked_targets": {
+                "plan_files": ["docs/exec-plans/active/sample.md"],
+                "generated_files": [],
+            },
+        },
+    )
 
 
 def assert_distill_mapping_meta(
@@ -595,16 +678,242 @@ def test_host_model_distill_json_contract(tmp_path: Path, capsys) -> None:
 
 
 
-def test_run_agents_uses_configured_provider_and_override_integration(
+def test_run_agents_preflight_failure_blocks_following_stages_integration(
     tmp_path: Path, capsys
 ) -> None:
-    """集成层应验证 run-agents 默认配置与显式 override。"""
+    """check preflight failure 时应在集成层阻断后续阶段。"""
 
     exit_code = main(["-p", str(tmp_path), "init"])
     captured = capsys.readouterr()
     assert exit_code == 0
     write_provider_config(tmp_path, default_provider="cursor")
     spec_file, plan_file = create_run_agents_inputs(tmp_path)
+
+    with patch(
+        "harness_commander.application.commands.run_check",
+        return_value=build_check_preflight_result(
+            status=ResultStatus.FAILURE,
+            blocking_count=1,
+            warning_count=0,
+            health_score=40,
+            ready_for_run_agents=False,
+        ),
+    ) as mocked_check:
+        exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "--json",
+                "run-agents",
+                "--spec",
+                str(spec_file),
+                "--plan",
+                str(plan_file),
+            ]
+        )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out.strip())
+
+    assert exit_code == 1
+    assert payload["status"] == "failure"
+    assert mocked_check.call_count == 1
+    assert [item["stage"] for item in payload["meta"]["agent_runs"]] == ["check"]
+    stage_contracts = assert_stage_contracts_shape(payload, expected_stages=["check"])
+    check_contract = find_stage_contract(stage_contracts, "check")
+    assert check_contract["status"] == "failure"
+    assert stage_has_blocking(check_contract)
+    assert check_contract["outputs"]["health_score"] == 40
+
+
+def test_run_agents_preflight_warning_continues_and_leaves_trace_integration(
+    tmp_path: Path, capsys
+) -> None:
+    """check preflight warning 时应继续执行并留下阶段留痕。"""
+
+    exit_code = main(["-p", str(tmp_path), "init"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    write_provider_config(tmp_path, default_provider="cursor")
+    spec_file, plan_file = create_run_agents_inputs(tmp_path)
+    verify_dir = tmp_path / ".claude/tmp"
+    verify_dir.mkdir(parents=True, exist_ok=True)
+    (verify_dir / "last-verify.status").write_text("PASS\n", encoding="utf-8")
+    (verify_dir / "verification-summary.md").write_text(
+        "- pytest all passed\n",
+        encoding="utf-8",
+    )
+
+    with patch(
+        "harness_commander.application.commands.run_check",
+        return_value=build_check_preflight_result(
+            status=ResultStatus.WARNING,
+            blocking_count=0,
+            warning_count=1,
+            health_score=82,
+            ready_for_run_agents=True,
+        ),
+    ):
+        exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "--json",
+                "run-agents",
+                "--spec",
+                str(spec_file),
+                "--plan",
+                str(plan_file),
+            ]
+        )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out.strip())
+
+    assert exit_code == 0
+    assert payload["status"] == "warning"
+    assert [item["stage"] for item in payload["meta"]["agent_runs"]] == [
+        "check",
+        "requirements",
+        "plan",
+        "implement",
+        "verify",
+        "pr-summary",
+    ]
+    stage_contracts = assert_stage_contracts_shape(
+        payload,
+        expected_stages=["check", "requirements", "plan", "implement", "verify", "pr-summary"],
+    )
+    check_contract = find_stage_contract(stage_contracts, "check")
+    assert check_contract["status"] == "warning"
+    assert check_contract["outputs"]["governance_entry"]["status"] == "needs_attention"
+    assert check_contract["outputs"]["health_score"] == 82
+
+
+def test_run_agents_preflight_success_keeps_verify_pr_summary_semantics_integration(
+    tmp_path: Path, capsys
+) -> None:
+    """check preflight success 时应保持 verify/pr-summary 的既有成功语义。"""
+
+    exit_code = main(["-p", str(tmp_path), "init"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    write_provider_config(tmp_path, default_provider="claude")
+    spec_file, plan_file = create_run_agents_inputs(tmp_path)
+    verify_dir = tmp_path / ".claude/tmp"
+    verify_dir.mkdir(parents=True, exist_ok=True)
+    (verify_dir / "last-verify.status").write_text("PASS\n", encoding="utf-8")
+    (verify_dir / "verification-summary.md").write_text(
+        "- pytest all passed\n",
+        encoding="utf-8",
+    )
+
+    with patch(
+        "harness_commander.application.commands.run_check",
+        return_value=build_check_preflight_result(
+            status=ResultStatus.SUCCESS,
+            blocking_count=0,
+            warning_count=0,
+            health_score=100,
+            ready_for_run_agents=True,
+        ),
+    ):
+        exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "--json",
+                "run-agents",
+                "--spec",
+                str(spec_file),
+                "--plan",
+                str(plan_file),
+            ]
+        )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out.strip())
+
+    assert exit_code == 0
+    assert payload["status"] == "success"
+    assert [item["stage"] for item in payload["meta"]["agent_runs"]] == [
+        "check",
+        "requirements",
+        "plan",
+        "implement",
+        "verify",
+        "pr-summary",
+    ]
+    stage_contracts = assert_stage_contracts_shape(
+        payload,
+        expected_stages=["check", "requirements", "plan", "implement", "verify", "pr-summary"],
+    )
+    check_contract = find_stage_contract(stage_contracts, "check")
+    verify_contract = find_stage_contract(stage_contracts, "verify")
+    pr_summary_contract = find_stage_contract(stage_contracts, "pr-summary")
+    assert check_contract["status"] == "success"
+    assert verify_contract["status"] == "success"
+    assert not stage_has_blocking(verify_contract)
+    assert pr_summary_contract["status"] == "success"
+    assert pr_summary_contract["artifacts"]
+
+
+def test_run_agents_real_check_failure_blocks_integration(
+    tmp_path: Path, capsys
+) -> None:
+    """不 mock check 时，真实阻断项也应直接拦住 run-agents。"""
+
+    exit_code = main(["-p", str(tmp_path), "init"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    write_provider_config(tmp_path, default_provider="claude")
+    spec_file, plan_file = create_run_agents_inputs(tmp_path)
+    (tmp_path / "docs/QUALITY_SCORE.md").unlink()
+
+    exit_code = main(
+        [
+            "-p",
+            str(tmp_path),
+            "--json",
+            "run-agents",
+            "--spec",
+            str(spec_file),
+            "--plan",
+            str(plan_file),
+        ]
+    )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out.strip())
+
+    assert exit_code == 1
+    assert payload["status"] == "failure"
+    assert [item["stage"] for item in payload["meta"]["agent_runs"]] == ["check"]
+    assert any(error["code"] == "missing_governance_source" for error in payload["errors"])
+    stage_contracts = assert_stage_contracts_shape(payload, expected_stages=["check"])
+    check_contract = find_stage_contract(stage_contracts, "check")
+    assert check_contract["status"] == "failure"
+    assert stage_has_blocking(check_contract)
+
+
+def test_run_agents_real_check_warning_continues_integration(
+    tmp_path: Path, capsys
+) -> None:
+    """不 mock check 时，真实 warning 应留痕并继续主链。"""
+
+    exit_code = main(["-p", str(tmp_path), "init"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    write_provider_config(tmp_path, default_provider="cursor")
+    spec_file, plan_file = create_run_agents_inputs(tmp_path)
+    (tmp_path / "docs/product-specs/v1/index.md").write_text(
+        "# spec v1 index\n",
+        encoding="utf-8",
+    )
+
+    verify_dir = tmp_path / ".claude/tmp"
+    verify_dir.mkdir(parents=True, exist_ok=True)
+    (verify_dir / "last-verify.status").write_text("PASS\n", encoding="utf-8")
+    (verify_dir / "verification-summary.md").write_text(
+        "- pytest all passed\n",
+        encoding="utf-8",
+    )
 
     exit_code = main(
         [
@@ -620,27 +929,83 @@ def test_run_agents_uses_configured_provider_and_override_integration(
         ]
     )
     captured = capsys.readouterr()
+    payload = json.loads(captured.out.strip())
+
+    assert exit_code == 0
+    assert payload["status"] == "warning"
+    assert [item["stage"] for item in payload["meta"]["agent_runs"]] == [
+        "check",
+        "requirements",
+        "plan",
+        "implement",
+        "verify",
+        "pr-summary",
+    ]
+    warning_codes = {warning["code"] for warning in payload["warnings"]}
+    assert "unquantified_rule_source" in warning_codes
+    stage_contracts = assert_stage_contracts_shape(
+        payload,
+        expected_stages=["check", "requirements", "plan", "implement", "verify", "pr-summary"],
+    )
+    check_contract = find_stage_contract(stage_contracts, "check")
+    assert check_contract["status"] == "warning"
+    assert stage_has_blocking(check_contract)
+
+
+def test_run_agents_uses_configured_provider_and_override_integration(
+    tmp_path: Path, capsys
+) -> None:
+    """集成层应验证 run-agents 默认配置与显式 override。"""
+
+    exit_code = main(["-p", str(tmp_path), "init"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    write_provider_config(tmp_path, default_provider="cursor")
+    spec_file, plan_file = create_run_agents_inputs(tmp_path)
+
+    with patch(
+        "harness_commander.application.commands.run_check",
+        return_value=build_check_preflight_result(status=ResultStatus.SUCCESS),
+    ):
+        exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "--json",
+                "run-agents",
+                "--spec",
+                str(spec_file),
+                "--plan",
+                str(plan_file),
+                "--dry-run",
+            ]
+        )
+    captured = capsys.readouterr()
     default_payload = json.loads(captured.out.strip())
 
     assert exit_code == 0
     assert default_payload["meta"]["provider"] == "cursor"
     assert default_payload["meta"]["provider_source"] == "default_provider"
 
-    override_exit_code = main(
-        [
-            "-p",
-            str(tmp_path),
-            "--json",
-            "run-agents",
-            "--spec",
-            str(spec_file),
-            "--plan",
-            str(plan_file),
-            "--provider",
-            "copilot",
-            "--dry-run",
-        ]
-    )
+    with patch(
+        "harness_commander.application.commands.run_check",
+        return_value=build_check_preflight_result(status=ResultStatus.SUCCESS),
+    ):
+        override_exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "--json",
+                "run-agents",
+                "--spec",
+                str(spec_file),
+                "--plan",
+                str(plan_file),
+                "--provider",
+                "copilot",
+                "--dry-run",
+            ]
+        )
     override_captured = capsys.readouterr()
     override_payload = json.loads(override_captured.out.strip())
 
@@ -658,21 +1023,25 @@ def test_run_agents_json_contract(tmp_path: Path, capsys) -> None:
     assert exit_code == 0
     spec_file, plan_file = create_run_agents_inputs(tmp_path)
 
-    exit_code = main(
-        [
-            "-p",
-            str(tmp_path),
-            "--json",
-            "run-agents",
-            "--spec",
-            str(spec_file),
-            "--plan",
-            str(plan_file),
-            "--provider",
-            "cursor",
-            "--dry-run",
-        ]
-    )
+    with patch(
+        "harness_commander.application.commands.run_check",
+        return_value=build_check_preflight_result(status=ResultStatus.SUCCESS),
+    ):
+        exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "--json",
+                "run-agents",
+                "--spec",
+                str(spec_file),
+                "--plan",
+                str(plan_file),
+                "--provider",
+                "cursor",
+                "--dry-run",
+            ]
+        )
     captured = capsys.readouterr()
     result = json.loads(captured.out.strip())
 
@@ -680,12 +1049,21 @@ def test_run_agents_json_contract(tmp_path: Path, capsys) -> None:
     assert result["command"] == "run-agents"
     assert result["meta"]["provider"] == "cursor"
     assert isinstance(result["meta"]["agent_runs"], list)
+    assert [item["stage"] for item in result["meta"]["agent_runs"]] == [
+        "check",
+        "requirements",
+        "plan",
+        "implement",
+        "verify",
+    ]
     stage_contracts = assert_stage_contracts_shape(
         result,
-        expected_stages=["requirements", "plan", "implement", "verify", "pr-summary"],
+        expected_stages=["check", "requirements", "plan", "implement", "verify", "pr-summary"],
     )
+    check_contract = find_stage_contract(stage_contracts, "check")
     verify_contract = find_stage_contract(stage_contracts, "verify")
     pr_summary_contract = find_stage_contract(stage_contracts, "pr-summary")
+    assert check_contract["status"] == "success"
     assert verify_contract["status"] == "warning"
     assert stage_has_blocking(verify_contract)
     assert pr_summary_contract["status"] == "warning"
@@ -711,18 +1089,22 @@ def test_run_agents_blocks_pr_summary_for_non_pass_verify_status_integration(
         encoding="utf-8",
     )
 
-    exit_code = main(
-        [
-            "-p",
-            str(tmp_path),
-            "--json",
-            "run-agents",
-            "--spec",
-            str(spec_file),
-            "--plan",
-            str(plan_file),
-        ]
-    )
+    with patch(
+        "harness_commander.application.commands.run_check",
+        return_value=build_check_preflight_result(status=ResultStatus.SUCCESS),
+    ):
+        exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "--json",
+                "run-agents",
+                "--spec",
+                str(spec_file),
+                "--plan",
+                str(plan_file),
+            ]
+        )
     captured = capsys.readouterr()
     payload = json.loads(captured.out.strip())
 
@@ -731,6 +1113,7 @@ def test_run_agents_blocks_pr_summary_for_non_pass_verify_status_integration(
     assert payload["warnings"][0]["code"] == "verify_not_ready_for_pr"
     assert not (tmp_path / "docs/generated/pr-summary").exists()
     assert [item["stage"] for item in payload["meta"]["agent_runs"]] == [
+        "check",
         "requirements",
         "plan",
         "implement",
@@ -738,10 +1121,12 @@ def test_run_agents_blocks_pr_summary_for_non_pass_verify_status_integration(
     ]
     stage_contracts = assert_stage_contracts_shape(
         payload,
-        expected_stages=["requirements", "plan", "implement", "verify", "pr-summary"],
+        expected_stages=["check", "requirements", "plan", "implement", "verify", "pr-summary"],
     )
+    check_contract = find_stage_contract(stage_contracts, "check")
     verify_contract = find_stage_contract(stage_contracts, "verify")
     pr_summary_contract = find_stage_contract(stage_contracts, "pr-summary")
+    assert check_contract["status"] == "success"
     assert verify_contract["status"] == "warning"
     assert stage_has_blocking(verify_contract)
     assert pr_summary_contract["status"] == "warning"
@@ -763,18 +1148,22 @@ def test_run_agents_generates_fallback_verification_block_when_summary_is_missin
     verify_dir.mkdir(parents=True, exist_ok=True)
     (verify_dir / "last-verify.status").write_text("PASS\n", encoding="utf-8")
 
-    exit_code = main(
-        [
-            "-p",
-            str(tmp_path),
-            "--json",
-            "run-agents",
-            "--spec",
-            str(spec_file),
-            "--plan",
-            str(plan_file),
-        ]
-    )
+    with patch(
+        "harness_commander.application.commands.run_check",
+        return_value=build_check_preflight_result(status=ResultStatus.SUCCESS),
+    ):
+        exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "--json",
+                "run-agents",
+                "--spec",
+                str(spec_file),
+                "--plan",
+                str(plan_file),
+            ]
+        )
     captured = capsys.readouterr()
     payload = json.loads(captured.out.strip())
 
@@ -785,10 +1174,12 @@ def test_run_agents_generates_fallback_verification_block_when_summary_is_missin
     assert "验证摘要文件存在但为空，请人工补充。" in content
     stage_contracts = assert_stage_contracts_shape(
         payload,
-        expected_stages=["requirements", "plan", "implement", "verify", "pr-summary"],
+        expected_stages=["check", "requirements", "plan", "implement", "verify", "pr-summary"],
     )
+    check_contract = find_stage_contract(stage_contracts, "check")
     verify_contract = find_stage_contract(stage_contracts, "verify")
     pr_summary_contract = find_stage_contract(stage_contracts, "pr-summary")
+    assert check_contract["status"] == "success"
     assert verify_contract["status"] == "success"
     assert stage_uses_fallback(verify_contract)
     assert stage_uses_fallback(pr_summary_contract)
@@ -821,18 +1212,22 @@ def test_run_agents_avoids_overwriting_existing_pr_summary_file(
         "harness_commander.application.commands.utc_timestamp_precise",
         return_value="2026-04-07T00:00:00.000000Z",
     ):
-        exit_code = main(
-            [
-                "-p",
-                str(tmp_path),
-                "--json",
-                "run-agents",
-                "--spec",
-                str(spec_file),
-                "--plan",
-                str(plan_file),
-            ]
-        )
+        with patch(
+            "harness_commander.application.commands.run_check",
+            return_value=build_check_preflight_result(status=ResultStatus.SUCCESS),
+        ):
+            exit_code = main(
+                [
+                    "-p",
+                    str(tmp_path),
+                    "--json",
+                    "run-agents",
+                    "--spec",
+                    str(spec_file),
+                    "--plan",
+                    str(plan_file),
+                ]
+            )
     captured = capsys.readouterr()
     payload = json.loads(captured.out.strip())
 
@@ -844,10 +1239,12 @@ def test_run_agents_avoids_overwriting_existing_pr_summary_file(
     assert existing_path.read_text(encoding="utf-8") == "# existing summary\n"
     stage_contracts = assert_stage_contracts_shape(
         payload,
-        expected_stages=["requirements", "plan", "implement", "verify", "pr-summary"],
+        expected_stages=["check", "requirements", "plan", "implement", "verify", "pr-summary"],
     )
+    check_contract = find_stage_contract(stage_contracts, "check")
     verify_contract = find_stage_contract(stage_contracts, "verify")
     pr_summary_contract = find_stage_contract(stage_contracts, "pr-summary")
+    assert check_contract["status"] == "success"
     assert verify_contract["status"] == "success"
     assert not stage_has_blocking(verify_contract)
     assert not stage_uses_fallback(verify_contract)
