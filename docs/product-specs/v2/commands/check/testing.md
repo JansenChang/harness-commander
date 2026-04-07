@@ -36,7 +36,8 @@
 - 无阻断但有提醒项时：
   - `status=warning`
   - `governance_entry.status=needs_attention`
-  - `next_actions` 返回优先整改建议
+  - `next_actions` 先返回优先整改建议
+  - 若 `ready_for_run_agents=true`，`next_actions` 末项追加显式推进动作
 
 ### ready 场景
 

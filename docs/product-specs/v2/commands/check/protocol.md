@@ -45,6 +45,10 @@
   - `title`: 动作标题
   - `reason`: 动作触发原因
   - `suggestion`: 具体建议
+- Phase 1 约束：
+  - blocking 场景优先返回阻断修复动作
+  - warning-only 且可继续时，除整改动作外还应追加显式推进动作
+  - ready 场景返回 `proceed`
 
 ## 判定语义（Phase 1）
 

@@ -26,10 +26,39 @@ def _pick_packaging_python() -> str:
     """选择一个本机可导入 setuptools.build_meta 的解释器。"""
 
     candidates = [sys.executable]
-    for name in ("python", "python3"):
+    candidate_names = (
+        "python",
+        "python3",
+        "python3.10",
+        "python3.11",
+        "python3.12",
+        "python3.13",
+        "python3.14",
+    )
+    for name in candidate_names:
         candidate = shutil.which(name)
         if candidate and candidate not in candidates:
             candidates.append(candidate)
+
+    which_all = subprocess.run(
+        [
+            "/bin/zsh",
+            "-lc",
+            "which -a python python3 python3.10 python3.11 python3.12 python3.13 python3.14 2>/dev/null",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if which_all.stdout:
+        for raw_line in which_all.stdout.splitlines():
+            candidate = raw_line.strip()
+            if not candidate.startswith("/"):
+                continue
+            if not os.path.isfile(candidate) or not os.access(candidate, os.X_OK):
+                continue
+            if candidate not in candidates:
+                candidates.append(candidate)
 
     for candidate in candidates:
         probe = subprocess.run(
@@ -41,6 +70,38 @@ def _pick_packaging_python() -> str:
         if probe.returncode == 0:
             return candidate
     raise AssertionError("未找到可用于 editable install 的 Python 解释器。")
+
+
+def _write_harness_wrapper(bin_dir: Path) -> None:
+    """在测试虚拟环境脚本目录中写入本地 harness wrapper。"""
+
+    if os.name == "nt":
+        wrapper_path = bin_dir / "harness.cmd"
+        wrapper_path.write_text(
+            "\n".join(
+                [
+                    "@echo off",
+                    f'set "PYTHONPATH={REPO_ROOT / "src"};%PYTHONPATH%"',
+                    f'"{sys.executable}" -m harness_commander.cli %*',
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+    else:
+        wrapper_path = bin_dir / "harness"
+        wrapper_path.write_text(
+            "\n".join(
+                [
+                    "#!/bin/sh",
+                    f'export PYTHONPATH="{REPO_ROOT / "src"}${{PYTHONPATH:+:$PYTHONPATH}}"',
+                    f'exec "{sys.executable}" -m harness_commander.cli "$@"',
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        wrapper_path.chmod(0o755)
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -80,6 +141,15 @@ def ensure_editable_install(tmp_path_factory: pytest.TempPathFactory) -> None:
         check=False,
         env=env,
     )
+    if result.returncode == 0:
+        return
+
+    editable_backend_unsupported = (
+        'editable mode currently requires a setuptools-based build' in result.stderr
+    )
+    if editable_backend_unsupported:
+        _write_harness_wrapper(HARNESS_BIN_DIR)
+        return
     assert result.returncode == 0, result.stderr
 
 

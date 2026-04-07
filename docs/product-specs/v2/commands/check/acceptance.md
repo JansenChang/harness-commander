@@ -37,6 +37,7 @@
   - 命令状态为 `warning`
   - `governance_entry.status=needs_attention`
   - `next_actions` 提供可执行整改方向
+  - 若已满足进入条件，`next_actions` 仍显式给出继续推进动作
 
 ### AC4 ready 语义稳定
 

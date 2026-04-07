@@ -1524,6 +1524,8 @@ def test_check_marks_template_only_governance_docs_as_unquantified(
     next_actions = payload["meta"]["next_actions"]
     assert isinstance(next_actions, list)
     assert next_actions
+    assert next_actions[0]["code"] == "create_active_plan"
+    assert next_actions[0]["recommended_command"] == "harness propose-plan"
     assert payload["meta"]["health_score"] < 100
 
 

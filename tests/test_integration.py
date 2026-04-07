@@ -1424,6 +1424,9 @@ def test_check_reports_unquantified_rule_sources_in_summary(
     assert isinstance(next_actions, list)
     assert next_actions
     assert all(isinstance(action, dict) for action in next_actions)
+    assert next_actions[0]["code"] == "resolve_warning_issue"
+    assert next_actions[-1]["code"] == "proceed_with_attention"
+    assert next_actions[-1]["recommended_command"] == "harness run-agents"
 
 
 def test_check_governance_entry_blocked_for_secret_exposure_integration(

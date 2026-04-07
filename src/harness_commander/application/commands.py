@@ -1315,6 +1315,24 @@ def _build_check_next_actions(
                 "recommended_command": "harness run-agents",
             }
         )
+    elif governance_entry["status"] == "needs_attention" and governance_entry.get(
+        "ready_for_run_agents"
+    ):
+        actions.append(
+            {
+                "priority": "P2",
+                "code": "proceed_with_attention",
+                "title": "带着提醒项继续进入执行入口",
+                "reason": "当前没有阻断项，active 计划已存在，可继续进入 run-agents，但提醒项仍需持续跟踪。",
+                "type": "proceed_with_attention",
+                "issue_code": None,
+                "summary": "当前可继续进入 run-agents，同时保留对提醒项的整改与复查。",
+                "suggestion": "进入 run-agents 后保持提醒项可见，并在阶段结束后复跑 check 确认治理状态没有恶化。",
+                "source": "docs/product-specs/v2/commands/check/product.md",
+                "location": "docs/exec-plans/active/",
+                "recommended_command": "harness run-agents",
+            }
+        )
     elif governance_entry["status"] == "blocked":
         actions.append(
             {
