@@ -23,6 +23,19 @@
   - `run-agents`
 - 第一优先级命令：
   - `run-agents`
+- `run-agents` 的宿主模型接入范围：
+  - 只限 `requirements` 与 `plan` 阶段
+- `check` 的定位：
+  - 治理完整性入口
+- `collect-evidence` 的定位：
+  - 保持独立命令
+  - 在错误或失败时触发留痕
+- 最小闭环：
+  - `run-agents`
+  - `check`
+  - `distill`
+- 最小闭环之外的能力：
+  - 本轮不优先推进
 
 ## V2 总问题陈述
 
@@ -62,7 +75,18 @@
 - 宿主模型将在 V2 中进入主路径，但采用分阶段推进：
   - 第一阶段：默认不用宿主模型，先保证 deterministic baseline
   - 第二阶段：`distill` 与 `run-agents` 默认优先宿主模型，失败回退到本地规则路径
+- `run-agents` 即使进入宿主模型主路径，也只让宿主模型接管 `requirements` 与 `plan`，不接管 `verify`、最终状态和阻断逻辑。
+- `distill` 是给下游大模型读取时使用的能力，但不替代 `design-docs/` 与 `product-specs/` 作为正式规则源。
 - 无论是否进入宿主模型主路径，Harness 都继续控制最终状态、产物路径、阻断逻辑和 fallback 事实。
+
+## 宿主模型永不接管的能力
+
+- 最终通过 / 失败状态
+- verify 阻断判断
+- 产物路径与命名
+- fallback 是否发生及其记录方式
+- provider 配置事实源
+- 结构化结果合同
 
 ## 命令导航
 
@@ -103,12 +127,15 @@
 - 把 `run-agents` 定义成真正的治理主入口
 - 明确阶段输入输出、阻断条件、恢复策略
 - 保持默认不依赖宿主模型
+- 形成 `run-agents + check + distill` 的最小闭环
 
 ### Phase 2
 
 - 让 `distill` 和 `run-agents` 进入“默认优先宿主模型，失败 fallback”模式
 - 把宿主模型能力限制在 Harness 可控的边界内
+- `run-agents` 仅开放 `requirements` 与 `plan` 给宿主模型主路径
 
 ### Phase 3
 
-- 再评估 `check`、`install-provider` 是否需要进入宿主模型增强主路径
+- 再评估 `check` 是否需要有限度引入宿主模型增强
+- `install-provider` 暂不作为本轮优先命令
