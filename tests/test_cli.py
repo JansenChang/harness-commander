@@ -79,6 +79,50 @@ def write_provider_config(root: Path, *, default_provider: str, installed: list[
     )
 
 
+def create_run_agents_inputs(
+    root: Path,
+    *,
+    spec_content: str | None = None,
+    plan_content: str | None = None,
+) -> tuple[Path, Path]:
+    """构造 run-agents 测试使用的最小 spec/plan 文档。"""
+
+    spec_file = root / "docs/product-specs/sample.md"
+    spec_file.parent.mkdir(parents=True, exist_ok=True)
+    spec_file.write_text(
+        spec_content
+        or (
+            "# 样例规格\n\n"
+            "## 业务目标\n- 支持多 agent 编排\n\n"
+            "## 核心逻辑\n- 验证通过后整理 PR\n\n"
+            "## 验收标准\n- 产出 PR summary\n"
+        ),
+        encoding="utf-8",
+    )
+    plan_file = root / "docs/exec-plans/active/sample.md"
+    plan_file.parent.mkdir(parents=True, exist_ok=True)
+    plan_file.write_text(
+        plan_content
+        or (
+            "# 样例计划\n\n"
+            "## Goal\n- 完成编排\n\n"
+            "## Context\n- 样例上下文\n\n"
+            "## Business Logic\n- 按阶段执行\n\n"
+            "## Scope\n- requirements\n- verify\n\n"
+            "## Acceptance Criteria\n- 生成 PR 摘要\n\n"
+            "## Exception Handling\n- 失败要保留状态\n\n"
+            "## Verification\n- 检查验证状态\n\n"
+            "## References\n- `ARCHITECTURE.md`\n- `docs/PLANS.md`\n- `docs/product-specs/v1/index.md`\n\n"
+            "## ULW 1: 编排\n\n"
+            "### 目标\n- 完成执行\n\n"
+            "### 涉及范围\n- 读取文档\n\n"
+            "### 验收标准\n- 输出阶段摘要\n"
+        ),
+        encoding="utf-8",
+    )
+    return spec_file, plan_file
+
+
 
 def test_init_command_creates_missing_directories(tmp_path: Path, capsys) -> None:
     """init 命令应补齐目录结构与模板文件并返回成功退出码。"""
@@ -535,16 +579,20 @@ def test_run_agents_blocks_pr_summary_when_verify_is_missing(
 
     create_minimal_repo(tmp_path)
     write_provider_config(tmp_path, default_provider="cursor")
-    spec_file = tmp_path / "docs/product-specs/sample.md"
-    spec_file.write_text(
-        "# 样例规格\n\n## 业务目标\n- 支持多宿主工具\n\n## 核心逻辑\n- 保持统一协议\n\n## 验收标准\n- 生成阶段摘要\n",
-        encoding="utf-8",
-    )
-    plan_file = tmp_path / "docs/exec-plans/active/sample.md"
-    plan_file.parent.mkdir(parents=True, exist_ok=True)
-    plan_file.write_text(
-        "# 样例计划\n\n## Goal\n- 完成编排\n\n## Context\n- 样例上下文\n\n## Business Logic\n- 按阶段执行\n\n## Scope\n- requirements\n- plan\n\n## Acceptance Criteria\n- 可阻断 PR\n\n## Exception Handling\n- 失败要保留状态\n\n## Verification\n- 检查验证状态\n\n## References\n- `ARCHITECTURE.md`\n- `docs/PLANS.md`\n- `docs/product-specs/v1/index.md`\n\n## ULW 1: 编排\n\n### 目标\n- 完成执行\n\n### 涉及范围\n- 读取文档\n\n### 验收标准\n- 输出阶段摘要\n",
-        encoding="utf-8",
+    spec_file, plan_file = create_run_agents_inputs(
+        tmp_path,
+        spec_content=(
+            "# 样例规格\n\n## 业务目标\n- 支持多宿主工具\n\n"
+            "## 核心逻辑\n- 保持统一协议\n\n## 验收标准\n- 生成阶段摘要\n"
+        ),
+        plan_content=(
+            "# 样例计划\n\n## Goal\n- 完成编排\n\n## Context\n- 样例上下文\n\n"
+            "## Business Logic\n- 按阶段执行\n\n## Scope\n- requirements\n- plan\n\n"
+            "## Acceptance Criteria\n- 可阻断 PR\n\n## Exception Handling\n- 失败要保留状态\n\n"
+            "## Verification\n- 检查验证状态\n\n"
+            "## References\n- `ARCHITECTURE.md`\n- `docs/PLANS.md`\n- `docs/product-specs/v1/index.md`\n\n"
+            "## ULW 1: 编排\n\n### 目标\n- 完成执行\n\n### 涉及范围\n- 读取文档\n\n### 验收标准\n- 输出阶段摘要\n"
+        ),
     )
 
     exit_code = main(
@@ -569,6 +617,7 @@ def test_run_agents_blocks_pr_summary_when_verify_is_missing(
     assert payload["meta"]["provider_source"] == "default_provider"
     stages = [item["stage"] for item in payload["meta"]["agent_runs"]]
     assert stages == ["requirements", "plan", "implement", "verify"]
+    assert payload["artifacts"] == []
 
 
 def test_run_agents_provider_override_takes_precedence_over_config(
@@ -578,17 +627,7 @@ def test_run_agents_provider_override_takes_precedence_over_config(
 
     create_minimal_repo(tmp_path)
     write_provider_config(tmp_path, default_provider="claude")
-    spec_file = tmp_path / "docs/product-specs/sample.md"
-    spec_file.write_text(
-        "# 样例规格\n\n## 业务目标\n- 支持多 agent 编排\n\n## 核心逻辑\n- 验证通过后整理 PR\n\n## 验收标准\n- 产出 PR summary\n",
-        encoding="utf-8",
-    )
-    plan_file = tmp_path / "docs/exec-plans/active/sample.md"
-    plan_file.parent.mkdir(parents=True, exist_ok=True)
-    plan_file.write_text(
-        "# 样例计划\n\n## Goal\n- 完成编排\n\n## Context\n- 样例上下文\n\n## Business Logic\n- 按阶段执行\n\n## Scope\n- requirements\n- verify\n\n## Acceptance Criteria\n- 生成 PR 摘要\n\n## Exception Handling\n- 失败要保留状态\n\n## Verification\n- 检查验证状态\n\n## References\n- `ARCHITECTURE.md`\n- `docs/PLANS.md`\n- `docs/product-specs/v1/index.md`\n\n## ULW 1: 编排\n\n### 目标\n- 完成执行\n\n### 涉及范围\n- 读取文档\n\n### 验收标准\n- 输出阶段摘要\n",
-        encoding="utf-8",
-    )
+    spec_file, plan_file = create_run_agents_inputs(tmp_path)
     verify_dir = tmp_path / ".claude/tmp"
     verify_dir.mkdir(parents=True, exist_ok=True)
     (verify_dir / "last-verify.status").write_text("PASS\n", encoding="utf-8")
@@ -622,6 +661,173 @@ def test_run_agents_provider_override_takes_precedence_over_config(
     assert "PR Summary" in pr_summary_path.read_text(encoding="utf-8")
     assert payload["meta"]["provider"] == "copilot"
     assert payload["meta"]["provider_source"] == "override"
+
+
+def test_run_agents_fails_when_spec_is_missing(tmp_path: Path, capsys) -> None:
+    """run-agents 缺少 spec 时应返回稳定 failure。"""
+
+    create_minimal_repo(tmp_path)
+    write_provider_config(tmp_path, default_provider="claude")
+    _, plan_file = create_run_agents_inputs(tmp_path)
+    missing_spec = tmp_path / "docs/product-specs/missing.md"
+
+    exit_code = main(
+        [
+            "-p",
+            str(tmp_path),
+            "--json",
+            "run-agents",
+            "--spec",
+            str(missing_spec),
+            "--plan",
+            str(plan_file),
+        ]
+    )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 1
+    assert payload["status"] == "failure"
+    assert payload["errors"][0]["code"] == "spec_not_found"
+    assert payload["errors"][0]["location"] == str(missing_spec)
+
+
+def test_run_agents_fails_when_plan_is_missing(tmp_path: Path, capsys) -> None:
+    """run-agents 缺少 plan 时应返回稳定 failure。"""
+
+    create_minimal_repo(tmp_path)
+    write_provider_config(tmp_path, default_provider="claude")
+    spec_file, _ = create_run_agents_inputs(tmp_path)
+    missing_plan = tmp_path / "docs/exec-plans/active/missing.md"
+
+    exit_code = main(
+        [
+            "-p",
+            str(tmp_path),
+            "--json",
+            "run-agents",
+            "--spec",
+            str(spec_file),
+            "--plan",
+            str(missing_plan),
+        ]
+    )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 1
+    assert payload["status"] == "failure"
+    assert payload["errors"][0]["code"] == "plan_not_found"
+    assert payload["errors"][0]["location"] == str(missing_plan)
+
+
+def test_run_agents_fails_when_plan_validation_has_blocking_issues(
+    tmp_path: Path, capsys
+) -> None:
+    """run-agents 计划不满足最小治理要求时应返回 failure。"""
+
+    create_minimal_repo(tmp_path)
+    write_provider_config(tmp_path, default_provider="claude")
+    spec_file, plan_file = create_run_agents_inputs(
+        tmp_path,
+        plan_content="# 样例计划\n\n## Goal\n- 只有目标，没有引用\n",
+    )
+
+    exit_code = main(
+        [
+            "-p",
+            str(tmp_path),
+            "--json",
+            "run-agents",
+            "--spec",
+            str(spec_file),
+            "--plan",
+            str(plan_file),
+        ]
+    )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 1
+    assert payload["status"] == "failure"
+    assert payload["summary"] == "执行计划不满足最小治理要求，已停止多 agent 编排。"
+    error_codes = {error["code"] for error in payload["errors"]}
+    assert "missing_section" in error_codes
+    assert "missing_reference" in error_codes
+
+
+def test_run_agents_blocks_pr_summary_when_verify_status_is_not_pass(
+    tmp_path: Path, capsys
+) -> None:
+    """run-agents 在 verify 非 PASS 时应阻断 PR 摘要生成。"""
+
+    create_minimal_repo(tmp_path)
+    write_provider_config(tmp_path, default_provider="claude")
+    spec_file, plan_file = create_run_agents_inputs(tmp_path)
+    verify_dir = tmp_path / ".claude/tmp"
+    verify_dir.mkdir(parents=True, exist_ok=True)
+    (verify_dir / "last-verify.status").write_text("FAIL\n", encoding="utf-8")
+
+    exit_code = main(
+        [
+            "-p",
+            str(tmp_path),
+            "--json",
+            "run-agents",
+            "--spec",
+            str(spec_file),
+            "--plan",
+            str(plan_file),
+        ]
+    )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert payload["status"] == "warning"
+    assert payload["warnings"][0]["code"] == "verify_not_ready_for_pr"
+    assert payload["warnings"][0]["detail"]["verify_status"] == "warning"
+    stages = [item["stage"] for item in payload["meta"]["agent_runs"]]
+    assert stages == ["requirements", "plan", "implement", "verify"]
+    assert payload["artifacts"] == []
+
+
+def test_run_agents_dry_run_reports_pr_summary_without_writing_file(
+    tmp_path: Path, capsys
+) -> None:
+    """run-agents dry-run 在 verify 通过时应只报告将创建的 PR 摘要。"""
+
+    create_minimal_repo(tmp_path)
+    write_provider_config(tmp_path, default_provider="claude")
+    spec_file, plan_file = create_run_agents_inputs(tmp_path)
+    verify_dir = tmp_path / ".claude/tmp"
+    verify_dir.mkdir(parents=True, exist_ok=True)
+    (verify_dir / "last-verify.status").write_text("PASS\n", encoding="utf-8")
+    (verify_dir / "verification-summary.md").write_text("- pytest 全部通过\n", encoding="utf-8")
+
+    exit_code = main(
+        [
+            "-p",
+            str(tmp_path),
+            "--json",
+            "run-agents",
+            "--spec",
+            str(spec_file),
+            "--plan",
+            str(plan_file),
+            "--dry-run",
+        ]
+    )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert payload["status"] == "success"
+    assert payload["artifacts"][0]["action"] == "would_create"
+    pr_summary_path = Path(payload["artifacts"][0]["path"])
+    assert not pr_summary_path.exists()
+    stages = [item["stage"] for item in payload["meta"]["agent_runs"]]
+    assert stages == ["requirements", "plan", "implement", "verify", "pr-summary"]
 
 
 def test_install_provider_cli_dispatches_supported_targets(tmp_path: Path, capsys) -> None:
@@ -663,23 +869,76 @@ def test_install_provider_provider_spec_and_summary(tmp_path: Path, capsys) -> N
     """install-provider 的 provider 规格与摘要应反映 Claude 真实安装能力。"""
 
     create_minimal_repo(tmp_path)
+    user_skill_dir = tmp_path / "user-home/.claude/skills"
 
     spec = get_provider_spec("claude")
     assert spec.install_support_level == "fully_supported"
     assert spec.wrapper_source == "host_templates/claude/harness"
     assert spec.legacy_project_skill_target == ".claude/skills/harness/SKILL.md"
 
-    exit_code = main(["-p", str(tmp_path), "--json", "install-provider", "--provider", "claude"])
-    captured = capsys.readouterr()
-    payload = json.loads(captured.out)
+    with patch(
+        "harness_commander.application.provider_installers._detect_provider_cli",
+        return_value=True,
+    ), patch.dict(
+        "os.environ",
+        {"HARNESS_CLAUDE_SKILLS_DIR": str(user_skill_dir)},
+        clear=False,
+    ):
+        exit_code = main(
+            ["-p", str(tmp_path), "--json", "install-provider", "--provider", "claude"]
+        )
+        captured = capsys.readouterr()
+        payload = json.loads(captured.out)
 
     assert exit_code == 0
     assert payload["status"] == "success"
     assert payload["meta"]["results"]["claude"]["status"] == "installed"
+    assert payload["meta"]["results"]["claude"]["wrapper_kind"] == "skill"
     assert payload["meta"]["results"]["claude"]["installation_mode"] == "user_skill_copy"
     assert payload["meta"]["results"]["claude"]["install_attempted"] is True
     assert payload["meta"]["results"]["claude"]["resolved_target_dir"] is not None
     assert "1 个已完成真实安装" in payload["summary"]
+
+
+def test_install_provider_returns_warning_when_user_target_is_not_writable(
+    tmp_path: Path, capsys
+) -> None:
+    """install-provider 遇到用户目录权限失败时应返回稳定 warning 结果。"""
+
+    create_minimal_repo(tmp_path)
+
+    with patch(
+        "harness_commander.application.provider_installers._detect_provider_cli",
+        return_value=True,
+    ), patch.dict(
+        "os.environ",
+        {"HARNESS_CLAUDE_SKILLS_DIR": str(tmp_path / "user-home/.claude/skills")},
+        clear=False,
+    ), patch(
+        "harness_commander.application.provider_installers.write_text",
+        side_effect=PermissionError("permission denied"),
+    ):
+        exit_code = main(
+            ["-p", str(tmp_path), "--json", "install-provider", "--provider", "claude"]
+        )
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert payload["status"] == "warning"
+    result = payload["meta"]["results"]["claude"]
+    assert result["status"] == "failed_permission"
+    assert result["failure_reason_code"] == "target_not_writable"
+    assert result["wrapper_kind"] == "skill"
+    assert result["install_attempted"] is True
+    assert payload["warnings"][0]["code"] == "provider_install_incomplete"
+    assert payload["meta"]["installed_providers"] == []
+    config_payload = json.loads(
+        (tmp_path / ".harness/provider-config.json").read_text(encoding="utf-8")
+    )
+    assert config_payload["installation_results"]["claude"]["status"] == "failed_permission"
+    assert config_payload["installed_providers"] == []
 
 
 

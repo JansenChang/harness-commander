@@ -210,6 +210,7 @@ def _normalize_installation_results(results: Any) -> dict[str, dict[str, Any]]:
         payload = dict(detail) if isinstance(detail, dict) else {}
         payload.setdefault("status", "unknown")
         payload.setdefault("support_level", spec.install_support_level)
+        payload.setdefault("wrapper_kind", spec.wrapper_kind)
         payload.setdefault("detected", False)
         payload.setdefault("cli_command", spec.cli_command)
         payload.setdefault("configured_at", None)
@@ -220,6 +221,9 @@ def _normalize_installation_results(results: Any) -> dict[str, dict[str, Any]]:
         payload.setdefault("target_scope", "user")
         payload.setdefault("artifact_paths", [])
         payload.setdefault("install_attempted", False)
+        payload.setdefault("installation_mode", "wrapper")
+        payload.setdefault("dry_run", False)
+        payload.setdefault("installer", spec.installer_name)
         payload.setdefault("failure_reason_code", None)
         payload.setdefault("failure_reason_detail", None)
         normalized_results[normalized_provider] = payload

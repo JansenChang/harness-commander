@@ -86,6 +86,7 @@ def _build_initial_result(
     return {
         "status": "pending",
         "support_level": spec.install_support_level,
+        "wrapper_kind": spec.wrapper_kind,
         "detected": plan.detected,
         "host_detected": plan.resolved_target.host_detected,
         "cli_command": spec.cli_command,
@@ -160,12 +161,16 @@ def _execute_install_plan(
         return []
 
     if spec.wrapper_kind == "skill":
-        artifacts = _install_skill_directory(
-            source_dir=source_path,
-            target_dir=target_dir,
-            install_mode=install_mode,
-            dry_run=dry_run,
-        )
+        try:
+            artifacts = _install_skill_directory(
+                source_dir=source_path,
+                target_dir=target_dir,
+                install_mode=install_mode,
+                dry_run=dry_run,
+            )
+        except OSError as error:
+            _mark_install_os_error(result=result, error=error, provider=plan.provider)
+            return []
         if not artifacts:
             result["status"] = "failed_source_missing"
             result["message"] = f"未找到 provider wrapper 源目录：{source_path}"
@@ -175,16 +180,28 @@ def _execute_install_plan(
         result["artifact_paths"] = [artifact.path for artifact in artifacts]
         install_artifacts = artifacts
     elif install_mode == "link":
-        artifact = _link_wrapper(source_path=source_path, target_file=target_file, dry_run=dry_run)
+        try:
+            artifact = _link_wrapper(
+                source_path=source_path,
+                target_file=target_file,
+                dry_run=dry_run,
+            )
+        except OSError as error:
+            _mark_install_os_error(result=result, error=error, provider=plan.provider)
+            return []
         result["artifact_paths"] = [str(target_file)]
         install_artifacts = [artifact]
     else:
-        artifact = write_text(
-            target_file,
-            source_path.read_text(encoding="utf-8"),
-            dry_run=dry_run,
-            overwrite=True,
-        )
+        try:
+            artifact = write_text(
+                target_file,
+                source_path.read_text(encoding="utf-8"),
+                dry_run=dry_run,
+                overwrite=True,
+            )
+        except OSError as error:
+            _mark_install_os_error(result=result, error=error, provider=plan.provider)
+            return []
         result["artifact_paths"] = [str(target_file)]
         install_artifacts = [artifact]
     result["status"] = "installed"
@@ -193,6 +210,22 @@ def _execute_install_plan(
     result["failure_reason_code"] = None
     result["failure_reason_detail"] = None
     return install_artifacts
+
+
+def _mark_install_os_error(
+    *, result: InstallerResult, error: OSError, provider: str
+) -> None:
+    """把安装阶段的文件系统错误收敛为稳定结果。"""
+
+    if isinstance(error, PermissionError):
+        result["status"] = "failed_permission"
+        result["message"] = f"provider {provider} 目标目录不可写，自动安装失败。"
+        result["failure_reason_code"] = "target_not_writable"
+    else:
+        result["status"] = "failed_filesystem"
+        result["message"] = f"provider {provider} 安装时发生文件系统错误。"
+        result["failure_reason_code"] = "filesystem_error"
+    result["failure_reason_detail"] = str(error)
 
 
 def _install_skill_directory(

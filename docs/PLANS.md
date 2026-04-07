@@ -21,8 +21,8 @@
 
 ### 当前阶段
 
-- Harness-Commander V1 的 CLI 主命令集已经落地，当前阶段从“补命令骨架”切到“发布前对齐、安装链路硬化和文档归档”。
-- `docs/exec-plans/active/` 只保留仍需继续跟进的命令级计划；历史阶段总计划统一归档到 `docs/exec-plans/completed/`。
+- Harness-Commander V1 的 CLI 主命令集已经落地，本轮执行层实现任务已完成收敛，当前阶段切到“归档执行任务 + 重新审视产品缺陷”。
+- `docs/exec-plans/active/` 当前不再保留命令级执行计划；本轮命令计划快照已统一归档到 `docs/exec-plans/completed/2026-04-07-harness-commander-v1-exec-archive/`。
 
 ### 命令状态快照
 
@@ -40,17 +40,18 @@
 
 ### 当前重点
 
-- 统一 active / completed 的计划入口，避免“代码已实现但计划仍停留在历史阶段”的漂移。
-- 继续收敛 `install-provider` 的用户目录安装语义、权限失败结果和 acceptance 覆盖。
-- 继续收敛打包与 editable install 验证链路，保证本地与 CI 环境都能稳定跑通。
+- 归档本轮执行层任务，冻结当前实现状态，避免在产品审视前继续滚动实现范围。
+- 重新审视命令设计、结果协议和工作流层面的产品缺陷，决定下一轮是否需要新的 active exec plan。
+- 若重开执行任务，应以产品缺陷清单为输入重新生成 active 计划，而不是继续复用本轮硬化计划。
 
 ### 当前阻塞与风险
 
-- 2026-04-07 本地执行 `pytest` 的结果为：`49 passed, 1 failed, 8 errors`。
-- acceptance 侧错误主要来自 editable install 受 PEP 668 限制，当前环境中的 `pip install -e .` 被 `externally-managed-environment` 阻断。
-- `install-provider` 的一条 CLI 测试在当前环境下会尝试写入真实用户目录 `~/.claude/skills/...`，并因权限限制失败；这说明安装测试仍需进一步隔离真实宿主目录。
+- 2026-04-07 本地执行 `pytest` 的结果已恢复为：`67 passed`。
+- `install-provider` 相关阻塞已收敛：acceptance 改为临时虚拟环境自举 editable install，CLI 测试不再写真实用户目录，并对权限失败返回稳定结果合同。
+- `run-agents` 已补齐 verify 缺失 / 非 PASS 阻断、dry-run PR summary、不覆盖已有 PR summary、verification summary 缺失 fallback 等测试覆盖；剩余风险主要转向 `check` / `distill` 的集成级失败路径补齐。
+- 当前主要风险不再是执行稳定性，而是产品缺陷尚未系统复盘；如果继续直接补实现，容易在错误产品边界上做局部优化。
 
 ### 当前 active 入口
 
-- 命令级计划索引：`docs/exec-plans/active/harness-commander-v1/index.md`
-- 当前维护重点优先看：`install-provider`、`run-agents`
+- 当前无 active 执行计划。
+- 已归档入口：`docs/exec-plans/completed/2026-04-07-harness-commander-v1-exec-archive.md`

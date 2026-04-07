@@ -58,6 +58,52 @@ def write_provider_config(
     )
 
 
+def create_run_agents_inputs(
+    root: Path,
+    *,
+    spec_content: str | None = None,
+    plan_content: str | None = None,
+) -> tuple[Path, Path]:
+    """构造 run-agents 集成测试使用的最小 spec/plan 文档。"""
+
+    v1_index = root / "docs/product-specs/v1/index.md"
+    v1_index.parent.mkdir(parents=True, exist_ok=True)
+    v1_index.write_text("# spec v1 index\n", encoding="utf-8")
+
+    spec_file = root / "docs/product-specs/sample.md"
+    spec_file.write_text(
+        spec_content
+        or (
+            "# 样例规格\n\n"
+            "## 业务目标\n- 支持更多 provider\n\n"
+            "## 核心逻辑\n- 顺序阶段编排\n\n"
+            "## 验收标准\n- 返回 agent_runs\n"
+        ),
+        encoding="utf-8",
+    )
+    plan_file = root / "docs/exec-plans/active/sample.md"
+    plan_file.write_text(
+        plan_content
+        or (
+            "# 样例计划\n\n"
+            "## Goal\n- 完成编排\n\n"
+            "## Context\n- 样例上下文\n\n"
+            "## Business Logic\n- 顺序执行\n\n"
+            "## Scope\n- requirements\n\n"
+            "## Acceptance Criteria\n- 输出阶段摘要\n\n"
+            "## Exception Handling\n- 验证失败不整理 PR\n\n"
+            "## Verification\n- 检查验证状态\n\n"
+            "## References\n- `ARCHITECTURE.md`\n- `docs/PLANS.md`\n- `docs/product-specs/v1/index.md`\n\n"
+            "## ULW 1: 编排\n\n"
+            "### 目标\n- 完成执行\n\n"
+            "### 涉及范围\n- 读取文档\n\n"
+            "### 验收标准\n- 输出阶段摘要\n"
+        ),
+        encoding="utf-8",
+    )
+    return spec_file, plan_file
+
+
 
 def test_full_workflow_with_dry_run(tmp_path: Path, capsys) -> None:
     """测试完整工作流程（使用 dry-run 模式）。"""
@@ -339,21 +385,7 @@ def test_run_agents_uses_configured_provider_and_override_integration(
     captured = capsys.readouterr()
     assert exit_code == 0
     write_provider_config(tmp_path, default_provider="cursor")
-
-    v1_index = tmp_path / "docs/product-specs/v1/index.md"
-    v1_index.parent.mkdir(parents=True, exist_ok=True)
-    v1_index.write_text("# spec v1 index\n", encoding="utf-8")
-
-    spec_file = tmp_path / "docs/product-specs/sample.md"
-    spec_file.write_text(
-        "# 样例规格\n\n## 业务目标\n- 支持更多 provider\n\n## 核心逻辑\n- 顺序阶段编排\n\n## 验收标准\n- 返回 agent_runs\n",
-        encoding="utf-8",
-    )
-    plan_file = tmp_path / "docs/exec-plans/active/sample.md"
-    plan_file.write_text(
-        "# 样例计划\n\n## Goal\n- 完成编排\n\n## Context\n- 样例上下文\n\n## Business Logic\n- 顺序执行\n\n## Scope\n- requirements\n\n## Acceptance Criteria\n- 输出阶段摘要\n\n## Exception Handling\n- 验证失败不整理 PR\n\n## Verification\n- 检查验证状态\n\n## References\n- `ARCHITECTURE.md`\n- `docs/PLANS.md`\n- `docs/product-specs/v1/index.md`\n\n## ULW 1: 编排\n\n### 目标\n- 完成执行\n\n### 涉及范围\n- 读取文档\n\n### 验收标准\n- 输出阶段摘要\n",
-        encoding="utf-8",
-    )
+    spec_file, plan_file = create_run_agents_inputs(tmp_path)
 
     exit_code = main(
         [
@@ -405,21 +437,7 @@ def test_run_agents_json_contract(tmp_path: Path, capsys) -> None:
     exit_code = main(["-p", str(tmp_path), "init"])
     captured = capsys.readouterr()
     assert exit_code == 0
-
-    v1_index = tmp_path / "docs/product-specs/v1/index.md"
-    v1_index.parent.mkdir(parents=True, exist_ok=True)
-    v1_index.write_text("# spec v1 index\n", encoding="utf-8")
-
-    spec_file = tmp_path / "docs/product-specs/sample.md"
-    spec_file.write_text(
-        "# 样例规格\n\n## 业务目标\n- 支持更多 provider\n\n## 核心逻辑\n- 顺序阶段编排\n\n## 验收标准\n- 返回 agent_runs\n",
-        encoding="utf-8",
-    )
-    plan_file = tmp_path / "docs/exec-plans/active/sample.md"
-    plan_file.write_text(
-        "# 样例计划\n\n## Goal\n- 完成编排\n\n## Context\n- 样例上下文\n\n## Business Logic\n- 顺序执行\n\n## Scope\n- requirements\n\n## Acceptance Criteria\n- 输出阶段摘要\n\n## Exception Handling\n- 验证失败不整理 PR\n\n## Verification\n- 检查验证状态\n\n## References\n- `ARCHITECTURE.md`\n- `docs/PLANS.md`\n- `docs/product-specs/v1/index.md`\n\n## ULW 1: 编排\n\n### 目标\n- 完成执行\n\n### 涉及范围\n- 读取文档\n\n### 验收标准\n- 输出阶段摘要\n",
-        encoding="utf-8",
-    )
+    spec_file, plan_file = create_run_agents_inputs(tmp_path)
 
     exit_code = main(
         [
@@ -443,6 +461,139 @@ def test_run_agents_json_contract(tmp_path: Path, capsys) -> None:
     assert result["command"] == "run-agents"
     assert result["meta"]["provider"] == "cursor"
     assert isinstance(result["meta"]["agent_runs"], list)
+
+
+def test_run_agents_blocks_pr_summary_for_non_pass_verify_status_integration(
+    tmp_path: Path, capsys
+) -> None:
+    """集成层应验证 verify 非 PASS 时不会生成 PR 摘要。"""
+
+    exit_code = main(["-p", str(tmp_path), "init"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    write_provider_config(tmp_path, default_provider="cursor")
+    spec_file, plan_file = create_run_agents_inputs(tmp_path)
+
+    verify_dir = tmp_path / ".claude/tmp"
+    verify_dir.mkdir(parents=True, exist_ok=True)
+    (verify_dir / "last-verify.status").write_text("FAILED\n", encoding="utf-8")
+    (verify_dir / "verification-summary.md").write_text(
+        "- pytest failed\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        [
+            "-p",
+            str(tmp_path),
+            "--json",
+            "run-agents",
+            "--spec",
+            str(spec_file),
+            "--plan",
+            str(plan_file),
+        ]
+    )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out.strip())
+
+    assert exit_code == 0
+    assert payload["status"] == "warning"
+    assert payload["warnings"][0]["code"] == "verify_not_ready_for_pr"
+    assert not (tmp_path / "docs/generated/pr-summary").exists()
+    assert [item["stage"] for item in payload["meta"]["agent_runs"]] == [
+        "requirements",
+        "plan",
+        "implement",
+        "verify",
+    ]
+
+
+def test_run_agents_generates_fallback_verification_block_when_summary_is_missing(
+    tmp_path: Path, capsys
+) -> None:
+    """PASS 但缺少 verification summary 时，PR 摘要应带 fallback 文案。"""
+
+    exit_code = main(["-p", str(tmp_path), "init"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    write_provider_config(tmp_path, default_provider="claude")
+    spec_file, plan_file = create_run_agents_inputs(tmp_path)
+
+    verify_dir = tmp_path / ".claude/tmp"
+    verify_dir.mkdir(parents=True, exist_ok=True)
+    (verify_dir / "last-verify.status").write_text("PASS\n", encoding="utf-8")
+
+    exit_code = main(
+        [
+            "-p",
+            str(tmp_path),
+            "--json",
+            "run-agents",
+            "--spec",
+            str(spec_file),
+            "--plan",
+            str(plan_file),
+        ]
+    )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out.strip())
+
+    assert exit_code == 0
+    assert payload["status"] == "success"
+    pr_summary_path = Path(payload["artifacts"][0]["path"])
+    content = pr_summary_path.read_text(encoding="utf-8")
+    assert "验证摘要文件存在但为空，请人工补充。" in content
+
+
+def test_run_agents_avoids_overwriting_existing_pr_summary_file(
+    tmp_path: Path, capsys
+) -> None:
+    """PR 摘要目标冲突时，应自动生成新的可用文件名。"""
+
+    exit_code = main(["-p", str(tmp_path), "init"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    write_provider_config(tmp_path, default_provider="copilot")
+    spec_file, plan_file = create_run_agents_inputs(tmp_path)
+
+    verify_dir = tmp_path / ".claude/tmp"
+    verify_dir.mkdir(parents=True, exist_ok=True)
+    (verify_dir / "last-verify.status").write_text("PASS\n", encoding="utf-8")
+    (verify_dir / "verification-summary.md").write_text(
+        "- pytest all passed\n",
+        encoding="utf-8",
+    )
+
+    existing_path = tmp_path / "docs/generated/pr-summary/2026-04-07T00-00-00.000000Z-pr-summary.md"
+    existing_path.parent.mkdir(parents=True, exist_ok=True)
+    existing_path.write_text("# existing summary\n", encoding="utf-8")
+
+    with patch(
+        "harness_commander.application.commands.utc_timestamp_precise",
+        return_value="2026-04-07T00:00:00.000000Z",
+    ):
+        exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "--json",
+                "run-agents",
+                "--spec",
+                str(spec_file),
+                "--plan",
+                str(plan_file),
+            ]
+        )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out.strip())
+
+    assert exit_code == 0
+    assert payload["status"] == "success"
+    new_path = Path(payload["artifacts"][0]["path"])
+    assert new_path != existing_path
+    assert new_path.exists()
+    assert existing_path.read_text(encoding="utf-8") == "# existing summary\n"
 
 
 def test_check_reports_unquantified_rule_sources_in_summary(

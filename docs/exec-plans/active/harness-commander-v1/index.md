@@ -1,32 +1,20 @@
-# Harness-Commander V1 按命令执行计划索引
+# Harness-Commander V1 Active 执行计划索引
 
 ## 说明
 
-- 本目录按命令拆分维护 Harness-Commander V1 当前仍需跟进的执行计划。
-- 命令级计划与 `docs/product-specs/v1/commands/` 保持一一对应，便于只更新当前命令的实现上下文。
-- 本文件是当前 active 计划主入口；历史阶段计划与已完成事项应迁入 `docs/exec-plans/completed/`。
-- `init` 已作为实现基线落地，当前不再作为主要 active 开发项。
+- 本目录只保留当前仍需推进的执行层计划。
+- 命令级执行计划已在 2026-04-07 全量归档，等待下一轮产品缺陷审视后再决定是否重开 active 计划。
+- 已完成的执行计划快照统一迁入 `docs/exec-plans/completed/2026-04-07-harness-commander-v1-exec-archive/`。
 
 ## 开发进度快照（2026-04-07）
 
-| 命令 | 状态 | 备注 |
-| --- | --- | --- |
-| `propose-plan` | 已实现 | 保留计划作为结构与约束的维护入口 |
-| `plan-check` | 已实现 | 保留计划作为规则收敛入口 |
-| `sync` | 已实现 | 保留计划作为重大变更与产物更新维护入口 |
-| `distill` | 已实现 | 已有可选宿主模型增强，继续维护结果协议 |
-| `install-provider` | 已实现，继续硬化 | 当前重点在用户目录安装、权限失败语义和验收覆盖 |
-| `check` | 已实现 | 当前重点在默认扫描范围与规则来源稳定性 |
-| `collect-evidence` | 已实现 | 作为统一留痕入口继续保留 |
-| `run-agents` | 已实现，继续硬化 | 当前重点在验证阻断、provider 默认解析和 PR summary 产物 |
+| 状态 | 说明 |
+| --- | --- |
+| active 为空 | 当前没有继续执行的命令级实现计划 |
+| 已归档 | `init`、`propose-plan`、`plan-check`、`sync`、`distill`、`check`、`collect-evidence`、`run-agents`、`install-provider` 的执行计划快照已迁入 completed |
+| 下一步 | 先审视产品缺陷，再决定是否基于新问题重开执行层计划 |
 
-## 计划入口
+## 当前入口
 
-- `propose-plan`：`propose-plan.md`
-- `plan-check`：`plan-check.md`
-- `sync`：`sync.md`
-- `distill`：`distill.md`
-- `install-provider`：`install-provider.md`
-- `check`：`check.md`
-- `collect-evidence`：`collect-evidence.md`
-- `run-agents`：`run-agents.md`
+- 产品缺陷与下一轮问题整理：回到 `docs/PLANS.md` 和 `docs/product-specs/`
+- 本轮执行层归档记录：`docs/exec-plans/completed/2026-04-07-harness-commander-v1-exec-archive.md`

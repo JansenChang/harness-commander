@@ -11,6 +11,13 @@
 - provider 默认解析与临时 override
 - verify 阻断与 PR summary 落盘
 
+## 当前硬化进展（2026-04-07）
+
+- 已补齐 `verify` 状态文件缺失、状态非 `PASS`、计划校验失败时的阻断覆盖。
+- 已补齐 `--dry-run` 下 PR summary 只返回将创建产物、不真实落盘的覆盖。
+- 已补齐 verification summary 缺失时的 PR 摘要 fallback 文案覆盖。
+- 已补齐 PR summary 目标路径冲突时自动避让新文件名的覆盖。
+
 ## ULW
 
 - `RA-ULW-1`：固定 requirements -> plan -> implement -> verify -> pr-summary 阶段顺序

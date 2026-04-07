@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import sysconfig
@@ -18,20 +19,66 @@ SKILL_FILE = REPO_ROOT / "src/harness_commander/host_templates/claude/harness/SK
 SKILL_REFERENCE_FILE = REPO_ROOT / "src/harness_commander/host_templates/claude/harness/Reference/README.md"
 PROJECT_SKILL_FILE = REPO_ROOT / ".claude/skills/harness/SKILL.md"
 PROJECT_REFERENCE_FILE = REPO_ROOT / ".claude/skills/harness/Reference/README.md"
-VENV_BIN_DIR = sysconfig.get_path("scripts") or str(Path(sys.executable).resolve().parent)
+HARNESS_BIN_DIR = Path(sysconfig.get_path("scripts") or Path(sys.executable).resolve().parent)
+
+
+def _pick_packaging_python() -> str:
+    """选择一个本机可导入 setuptools.build_meta 的解释器。"""
+
+    candidates = [sys.executable]
+    for name in ("python", "python3"):
+        candidate = shutil.which(name)
+        if candidate and candidate not in candidates:
+            candidates.append(candidate)
+
+    for candidate in candidates:
+        probe = subprocess.run(
+            [candidate, "-c", "import setuptools.build_meta"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if probe.returncode == 0:
+            return candidate
+    raise AssertionError("未找到可用于 editable install 的 Python 解释器。")
 
 
 @pytest.fixture(scope="module", autouse=True)
-def ensure_editable_install() -> None:
-    """在当前测试解释器环境中完成可编辑安装。"""
+def ensure_editable_install(tmp_path_factory: pytest.TempPathFactory) -> None:
+    """在临时虚拟环境中完成可编辑安装。"""
+
+    global HARNESS_BIN_DIR
+
+    packaging_python = _pick_packaging_python()
+    venv_root = tmp_path_factory.mktemp("acceptance-venv") / "venv"
+    venv_result = subprocess.run(
+        [packaging_python, "-m", "venv", "--system-site-packages", str(venv_root)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert venv_result.returncode == 0, venv_result.stderr
+    HARNESS_BIN_DIR = venv_root / ("Scripts" if os.name == "nt" else "bin")
+    cache_dir = tmp_path_factory.mktemp("acceptance-pip-cache")
+    env = harness_env()
+    env["PIP_CACHE_DIR"] = str(cache_dir)
+    env["PIP_DISABLE_PIP_VERSION_CHECK"] = "1"
 
     result = subprocess.run(
-        [sys.executable, "-m", "pip", "install", "-e", "."],
+        [
+            str(HARNESS_BIN_DIR / ("python.exe" if os.name == "nt" else "python")),
+            "-m",
+            "pip",
+            "install",
+            "--no-build-isolation",
+            "-e",
+            ".",
+        ],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
         check=False,
-        env=harness_env(),
+        env=env,
     )
     assert result.returncode == 0, result.stderr
 
@@ -40,7 +87,7 @@ def harness_env() -> dict[str, str]:
     """返回包含当前虚拟环境脚本目录的 PATH。"""
 
     env = os.environ.copy()
-    env["PATH"] = f"{VENV_BIN_DIR}{os.pathsep}{env.get('PATH', '')}"
+    env["PATH"] = f"{HARNESS_BIN_DIR}{os.pathsep}{env.get('PATH', '')}"
     return env
 
 
