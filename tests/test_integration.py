@@ -1323,6 +1323,64 @@ def test_run_agents_avoids_overwriting_existing_pr_summary_file(
     assert pr_summary_contract["artifacts"]
 
 
+def test_check_reports_ready_governance_entry_integration(
+    tmp_path: Path, capsys
+) -> None:
+    """integration 场景下无阻断且无提醒时，应返回 ready 治理入口。"""
+
+    exit_code = main(["-p", str(tmp_path), "init"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+
+    quantifiable_docs = {
+        "docs/QUALITY_SCORE.md": "# QUALITY_SCORE\n\n- 每次改动都要补成功、失败与边界测试。\n",
+        "docs/SECURITY.md": "# SECURITY\n\n- 禁止提交明文凭据。\n",
+        "docs/design-docs/core-beliefs.md": "# beliefs\n\n- 优先复用既有封装。\n",
+        "docs/product-specs/v1/index.md": "# spec v1 index\n\n- `run-agents` 是默认执行入口。\n",
+    }
+    for relative_path, content in quantifiable_docs.items():
+        path = tmp_path / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+
+    active_plan = tmp_path / "docs/exec-plans/active/demo.md"
+    active_plan.parent.mkdir(parents=True, exist_ok=True)
+    active_plan.write_text("# demo plan\n", encoding="utf-8")
+
+    reference_file = tmp_path / "docs/references/demo-llms.txt"
+    reference_file.parent.mkdir(parents=True, exist_ok=True)
+    reference_file.write_text("reference\n", encoding="utf-8")
+
+    tests_dir = tmp_path / "tests"
+    tests_dir.mkdir(parents=True, exist_ok=True)
+    (tests_dir / "test_smoke.py").write_text("def test_smoke():\n    assert True\n", encoding="utf-8")
+
+    exit_code = main(["-p", str(tmp_path), "--json", "check"])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out.strip())
+
+    assert exit_code == 0
+    assert payload["command"] == "check"
+    assert payload["status"] == "success"
+    assert payload["warnings"] == []
+    assert payload["errors"] == []
+    assert payload["meta"]["blocking_count"] == 0
+    assert payload["meta"]["warning_count"] == 0
+    governance_entry = payload["meta"]["governance_entry"]
+    assert governance_entry["status"] == "ready"
+    assert governance_entry["ready_for_run_agents"] is True
+    assert governance_entry["ready_for_clean_pass"] is True
+    assert governance_entry["recommended_entrypoint"] == "harness run-agents"
+    next_actions = payload["meta"]["next_actions"]
+    assert isinstance(next_actions, list)
+    assert next_actions
+    assert next_actions[0]["code"] == "proceed"
+    assert next_actions[0]["recommended_command"] == "harness run-agents"
+    checked_targets = payload["meta"]["checked_targets"]
+    assert "docs/exec-plans/active/demo.md" in checked_targets["plan_files"]
+    assert "docs/references/demo-llms.txt" in checked_targets["generated_files"]
+
+
 def test_check_reports_unquantified_rule_sources_in_summary(
     tmp_path: Path, capsys
 ) -> None:

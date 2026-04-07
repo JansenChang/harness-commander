@@ -151,3 +151,16 @@
 - 关联测试：`tests/test_cli.py`、`tests/test_integration.py`
 - 关联文档：`docs/product-specs/v2/commands/distill/protocol.md`、`docs/product-specs/v2/commands/distill/testing.md`、`docs/RELIABILITY.md`
 - 关闭条件：后续 `distill` 失败路径持续保持“结果 / JSON / 落盘事实一致”，且不再出现 failure 仍写正式产物的回归。
+
+### [open] check 的 ready 成功入口曾缺少 integration 覆盖
+
+- 日期：2026-04-07
+- 类型：`ai-mistake`
+- 范围：`check` 治理入口、integration 测试覆盖
+- 现象：`check` 的产品/验收文档要求验证 ready 场景，但 integration 层此前只锁住 blocking / warning，没有真实仓库上下文下的 `status=success` + `governance_entry.status=ready` 用例。
+- 根因：前一轮实现优先覆盖问题发现路径，遗漏了“当前可以继续”的成功入口断言，导致文档要求和集成覆盖不完全对齐。
+- 当前处理：新增 real ready integration 用例，显式构造可量化治理文档、active plan、参考材料和测试目录，锁定 `ready_for_run_agents=true` 与 `next_actions[0].code=proceed`。
+- 防复发：后续任何治理入口命令都必须同时覆盖 blocking / warning / ready 三态；不能只测坏状态。
+- 关联测试：`tests/test_integration.py`
+- 关联文档：`docs/product-specs/v2/commands/check/testing.md`、`docs/product-specs/v2/commands/check/acceptance.md`
+- 关闭条件：`check` 的 ready 场景在后续全量回归中持续稳定，且不再出现只有 blocking / warning 被集成测试保护的情况。
