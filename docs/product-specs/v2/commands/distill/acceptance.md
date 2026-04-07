@@ -58,6 +58,14 @@
   - 返回 `provider_not_configured`
   - 不得伪造 `host-model` 成功结果
 
+### AC6 summary / artifact / meta 语义一致
+
+- dry-run 时：
+  - `artifacts` 返回 `would_create` / `would_overwrite`
+  - `summary` 不得宣称已正式生成参考材料
+- fallback / partial 时：
+  - `summary` 应能解释 warning 与 meta 中的核心事实
+
 ## 验收步骤（最小闭环）
 
 1. 跑 heuristic 场景，验证映射命中和 coverage 统计。

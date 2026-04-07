@@ -10,14 +10,14 @@
 
 - 状态：active
 - 当前主计划：`product-planning.md`
-- 当前阶段：已完成 `run-agents` preflight、`distill` integration failure、`check` ready integration 三片补洞；等待确认下一轮
+- 当前阶段：已完成 `run-agents` preflight、显式 `--plan` preflight override 覆盖、`distill` integration failure、`check` ready integration，以及 `distill` summary / artifact / meta 一致性补洞；等待确认下一轮
 
 ## 下一步
 
 - 待确认：
-  - 是否继续收敛 `check` 的 `next_actions` / 三态文案
-  - 是否继续强化 `distill` 的 artifact / summary / meta 一致性断言
-- 当前优先命令：待确认
+  - 是否继续推进 `run-agents` / `check` 的下一轮联动硬化
+  - 是否继续把 active 计划里已完成切片做归档收口
+- 当前优先命令：`run-agents`
 
 ## 计划入口
 

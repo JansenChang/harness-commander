@@ -98,6 +98,7 @@
   - `check` 阻断时的 failure
   - `check` warning 但继续执行
   - `check` success 正常继续
+  - 显式 `--plan` 存在且仅缺默认 active 计划时，preflight override 语义稳定
 - 现有 verify / pr-summary 逻辑不回归。
 
 ## ULW 4: 为下一轮强前置门和自动消费留扩展位
@@ -136,6 +137,7 @@
 
 - 运行 `pytest tests/test_cli.py tests/test_integration.py -k run_agents`
 - 检查 `check` failure / warning / success 三类预检场景
+- 检查显式 `--plan` 覆盖默认 active 缺失时的 `explicit_plan_override_applied`
 - 检查 verify / pr-summary 既有场景不回归
 
 ## References

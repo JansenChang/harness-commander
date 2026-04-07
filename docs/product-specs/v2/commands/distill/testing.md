@@ -16,11 +16,13 @@
   - 校验新增 `meta` 字段结构
   - 校验 heuristic / host-model / auto 下来源映射语义
   - 校验 fallback 兼容字段未回归
+  - 校验 summary 与 warning / dry-run artifact 事实一致
 - Integration 测试：
   - 校验真实文件提炼后的映射覆盖统计
   - 校验 host-model 失败回退路径下报告一致性
   - 校验真实 failure / edge path 下稳定错误协议不漂移
   - 校验输出参考材料中的来源映射区块
+  - 校验 dry-run 下 summary 不伪造正式落盘
 
 ## Phase 1 必测场景
 

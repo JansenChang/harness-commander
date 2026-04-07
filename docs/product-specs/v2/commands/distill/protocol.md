@@ -81,6 +81,7 @@
 - 新字段作为附加，不替代现有 fallback 语义。
 - `summary`、`warnings/errors`、`meta` 必须指向同一份事实。
 - failure 路径下，文件产物事实也必须与结果一致，不能出现“failure 但已创建正式参考材料”。
+- dry-run 路径下，`summary` 不得伪造“已创建正式参考材料”。
 
 ## deterministic baseline
 

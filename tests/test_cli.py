@@ -598,6 +598,67 @@ def test_distill_fails_when_extraction_is_insufficient(tmp_path: Path, capsys) -
     assert source_mapping_coverage["total_items"] == 0
 
 
+def test_distill_warning_summary_matches_partial_and_dry_run_artifact(
+    tmp_path: Path, capsys
+) -> None:
+    """distill warning/dry-run 摘要应与 warning 和 artifact 事实一致。"""
+
+    create_minimal_repo(tmp_path)
+    source_file = tmp_path / "brief.md"
+    source_file.write_text(
+        "# 简短文档\n\n## 业务目标\n保留一个最小目标。\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        ["-p", str(tmp_path), "--json", "distill", str(source_file), "--dry-run"]
+    )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert payload["status"] == "warning"
+    assert payload["artifacts"][0]["action"] == "would_create"
+    assert "参考材料预演" in payload["summary"]
+    assert "待人工复核" in payload["summary"]
+    assert not Path(payload["meta"]["target_path"]).exists()
+
+
+def test_distill_auto_fallback_summary_mentions_fallback(tmp_path: Path, capsys) -> None:
+    """auto fallback 时 summary 应显式反映 fallback 事实。"""
+
+    create_minimal_repo(tmp_path)
+    write_provider_config(tmp_path, default_provider="claude")
+    source_file = tmp_path / "requirements.md"
+    source_file.write_text(
+        "# 需求\n\n## 业务目标\n构建测试系统\n\n## 核心需求\n1. 用户管理\n",
+        encoding="utf-8",
+    )
+
+    with patch(
+        "harness_commander.application.commands.distill_with_host_model",
+        side_effect=HostModelError("boom"),
+    ):
+        exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "--json",
+                "distill",
+                str(source_file),
+                "--mode",
+                "auto",
+            ]
+        )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert payload["status"] == "warning"
+    assert "回退到规则提炼路径" in payload["summary"]
+    assert payload["meta"]["fallback_from"] == "host-model"
+
+
 def test_distill_extracts_requirements_and_constraints(tmp_path: Path, capsys) -> None:
     """distill 应从核心需求和技术约束中提炼规则与限制。"""
 
@@ -985,6 +1046,69 @@ def test_run_agents_continues_normally_when_check_preflight_succeeds(
     assert not stage_has_blocking(verify_contract)
     assert pr_summary_contract["status"] == "success"
 
+
+
+def test_run_agents_explicit_plan_override_keeps_preflight_moving_in_cli(
+    tmp_path: Path, capsys
+) -> None:
+    """显式 --plan 存在时，应覆盖默认 active 计划缺失导致的 preflight 阻断语义。"""
+
+    create_minimal_repo(tmp_path)
+    write_provider_config(tmp_path, default_provider="claude")
+
+    spec_file, active_plan_file = create_run_agents_inputs(tmp_path)
+    explicit_plan_file = tmp_path / "docs/exec-plans/manual/explicit-sample.md"
+    explicit_plan_file.parent.mkdir(parents=True, exist_ok=True)
+    explicit_plan_file.write_text(active_plan_file.read_text(encoding="utf-8"), encoding="utf-8")
+    active_plan_file.unlink()
+
+    verify_dir = tmp_path / ".claude/tmp"
+    verify_dir.mkdir(parents=True, exist_ok=True)
+    (verify_dir / "last-verify.status").write_text("PASS\n", encoding="utf-8")
+    (verify_dir / "verification-summary.md").write_text("- pytest 全部通过\n", encoding="utf-8")
+
+    exit_code = main(
+        [
+            "-p",
+            str(tmp_path),
+            "--json",
+            "run-agents",
+            "--spec",
+            str(spec_file),
+            "--plan",
+            str(explicit_plan_file),
+        ]
+    )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert payload["status"] == "warning"
+    assert payload["meta"]["check_preflight"]["explicit_plan_override_applied"] is True
+    assert payload["meta"]["check_preflight"]["ready_for_run_agents"] is True
+    assert payload["meta"]["check_preflight"]["governance_entry"]["recommended_entrypoint"] == (
+        "harness run-agents"
+    )
+    assert [item["stage"] for item in payload["meta"]["agent_runs"]] == [
+        "check",
+        "requirements",
+        "plan",
+        "implement",
+        "verify",
+        "pr-summary",
+    ]
+    check_stage = payload["meta"]["agent_runs"][0]
+    assert "已基于显式 --plan 修正" in check_stage["summary"]
+    stage_contracts = assert_stage_contracts_shape(
+        payload,
+        expected_stages=["check", "requirements", "plan", "implement", "verify", "pr-summary"],
+    )
+    check_contract = find_stage_contract(stage_contracts, "check")
+    assert check_contract["outputs"]["explicit_plan_override_applied"] is True
+    assert check_contract["outputs"]["ready_for_run_agents"] is True
+    assert check_contract["outputs"]["governance_entry"]["recommended_entrypoint"] == (
+        "harness run-agents"
+    )
 
 
 def test_run_agents_blocks_pr_summary_when_verify_is_missing(

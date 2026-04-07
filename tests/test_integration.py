@@ -677,6 +677,35 @@ def test_host_model_distill_json_contract(tmp_path: Path, capsys) -> None:
         any(item.get("mapping_status") == "unmatched" for item in flattened)
         or extraction_report["unresolved_sections"]
     )
+    assert "回退到规则提炼路径" in payload["summary"]
+
+
+def test_distill_dry_run_summary_matches_artifact_integration(
+    tmp_path: Path, capsys
+) -> None:
+    """integration 层应锁住 distill dry-run 的摘要与 artifact 事实一致。"""
+
+    exit_code = main(["-p", str(tmp_path), "init"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+
+    test_doc = tmp_path / "brief.md"
+    test_doc.write_text(
+        "# 简短文档\n\n## 业务目标\n保留一个最小目标。\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(["-p", str(tmp_path), "--json", "distill", str(test_doc), "--dry-run"])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out.strip())
+
+    assert exit_code == 0
+    assert payload["command"] == "distill"
+    assert payload["status"] == "warning"
+    assert payload["artifacts"][0]["action"] == "would_create"
+    assert "参考材料预演" in payload["summary"]
+    assert "待人工复核" in payload["summary"]
+    assert not Path(payload["meta"]["target_path"]).exists()
 
 
 def test_distill_insufficient_extraction_returns_stable_failure_integration(
@@ -923,6 +952,73 @@ def test_run_agents_preflight_success_keeps_verify_pr_summary_semantics_integrat
     assert not stage_has_blocking(verify_contract)
     assert pr_summary_contract["status"] == "success"
     assert pr_summary_contract["artifacts"]
+
+
+def test_run_agents_explicit_plan_override_keeps_preflight_moving_integration(
+    tmp_path: Path, capsys
+) -> None:
+    """integration 层应锁住显式 --plan 覆盖默认 active 缺失的 preflight 语义。"""
+
+    exit_code = main(["-p", str(tmp_path), "init"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    write_provider_config(tmp_path, default_provider="claude")
+
+    spec_file, active_plan_file = create_run_agents_inputs(tmp_path)
+    explicit_plan_file = tmp_path / "docs/exec-plans/manual/explicit-sample.md"
+    explicit_plan_file.parent.mkdir(parents=True, exist_ok=True)
+    explicit_plan_file.write_text(active_plan_file.read_text(encoding="utf-8"), encoding="utf-8")
+    active_plan_file.unlink()
+
+    verify_dir = tmp_path / ".claude/tmp"
+    verify_dir.mkdir(parents=True, exist_ok=True)
+    (verify_dir / "last-verify.status").write_text("PASS\n", encoding="utf-8")
+    (verify_dir / "verification-summary.md").write_text(
+        "- pytest all passed\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        [
+            "-p",
+            str(tmp_path),
+            "--json",
+            "run-agents",
+            "--spec",
+            str(spec_file),
+            "--plan",
+            str(explicit_plan_file),
+        ]
+    )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out.strip())
+
+    assert exit_code == 0
+    assert payload["status"] == "warning"
+    assert payload["meta"]["check_preflight"]["explicit_plan_override_applied"] is True
+    assert payload["meta"]["check_preflight"]["ready_for_run_agents"] is True
+    assert payload["meta"]["check_preflight"]["governance_entry"]["recommended_entrypoint"] == (
+        "harness run-agents"
+    )
+    assert [item["stage"] for item in payload["meta"]["agent_runs"]] == [
+        "check",
+        "requirements",
+        "plan",
+        "implement",
+        "verify",
+        "pr-summary",
+    ]
+    assert "已基于显式 --plan 修正" in payload["meta"]["agent_runs"][0]["summary"]
+    stage_contracts = assert_stage_contracts_shape(
+        payload,
+        expected_stages=["check", "requirements", "plan", "implement", "verify", "pr-summary"],
+    )
+    check_contract = find_stage_contract(stage_contracts, "check")
+    assert check_contract["outputs"]["explicit_plan_override_applied"] is True
+    assert check_contract["outputs"]["ready_for_run_agents"] is True
+    assert check_contract["outputs"]["governance_entry"]["recommended_entrypoint"] == (
+        "harness run-agents"
+    )
 
 
 def test_run_agents_real_check_failure_blocks_integration(

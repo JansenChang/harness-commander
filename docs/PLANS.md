@@ -17,7 +17,7 @@
 - 做任务拆分时，把这里作为上层目标输入
 - 回顾执行偏差时，检查是否偏离这里的阶段目标
 
-## 当前统一进度（2026-04-07）
+## 当前统一进度（2026-04-08）
 
 ### 当前阶段
 
@@ -41,18 +41,18 @@
 
 ### 当前重点
 
-- 已完成 `run-agents` Phase 1 阶段合同基线和 `check` 治理入口基线，当前继续推进 `distill` 的来源映射结果协议。
+- 已完成 `run-agents` Phase 1 阶段合同基线、显式 `--plan` preflight override 覆盖、`check` 治理入口基线，以及 `distill` 的来源映射与 summary / artifact / meta 一致性补洞。
 - 保持默认不依赖宿主模型，先收敛 deterministic baseline，再为后续宿主模型主路径留出结构化边界。
-- 在不扩大 schema 和增量逻辑范围的前提下，优先补齐：
-  - `distill` 的 `extraction_report`、`section_sources`、`source_mapping_coverage`
-  - `distill` 对应 CLI / integration 覆盖
-  - V2 `distill` 产品、协议、测试、验收文档
+- 当前下一轮优先考虑：
+  - `run-agents` 与 `check` 的进一步联动硬化
+  - 把最新 `distill` 进展回写到更上层 active / roadmap 文档
+  - 在继续扩大 schema 前保持当前 deterministic baseline 稳定
 
 ### 当前阻塞与风险
 
-- 2026-04-07 本地执行 `pytest` 的结果已恢复为：`67 passed`。
+- 2026-04-08 本地执行 `pytest` 的结果为：`84 passed`。
 - `install-provider` 相关阻塞已收敛：acceptance 改为临时虚拟环境自举 editable install，CLI 测试不再写真实用户目录，并对权限失败返回稳定结果合同。
-- `run-agents` 已补齐 verify 缺失 / 非 PASS 阻断、dry-run PR summary、不覆盖已有 PR summary、verification summary 缺失 fallback 等测试覆盖；剩余风险主要转向 `check` / `distill` 的集成级失败路径补齐。
+- `run-agents` 已补齐 verify 缺失 / 非 PASS 阻断、dry-run PR summary、不覆盖已有 PR summary、verification summary 缺失 fallback，以及显式 `--plan` 覆盖默认 active 缺失的 preflight 测试覆盖；`distill` 也已补齐 dry-run、fallback、partial 场景下的 summary / artifact / meta 一致性断言。
 - 当前主要风险已从“产品问题未定义”收敛到“V2 阶段合同尚未进入代码”；如果继续只靠摘要阶段推进，后续恢复、重试和宿主模型边界会继续漂浮。
 
 ### 当前 active 入口

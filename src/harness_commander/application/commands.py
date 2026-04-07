@@ -590,10 +590,14 @@ def run_distill(
             write_text(target_file, distilled_content, dry_run=dry_run, overwrite=True)
         )
 
-    if status == ResultStatus.FAILURE:
-        summary = f"输入材料 {source_name} 提炼不足，未生成参考材料 {target_name}。"
-    else:
-        summary = f"已将输入材料 {source_name} 压缩为参考材料 {target_name}。"
+    summary = _build_distill_summary(
+        status=status,
+        source_name=source_name,
+        target_name=target_name,
+        dry_run=dry_run,
+        fallback_from=fallback_from,
+        unresolved_sections=unresolved_sections,
+    )
     LOGGER.info(
         "distill 命令执行完成 root=%s source=%s target=%s dry_run=%s",
         root,
@@ -633,6 +637,35 @@ def run_distill(
             "supported_providers": list(SUPPORTED_PROVIDERS),
         },
     )
+
+
+def _build_distill_summary(
+    *,
+    status: ResultStatus,
+    source_name: str,
+    target_name: str,
+    dry_run: bool,
+    fallback_from: str | None,
+    unresolved_sections: list[str],
+) -> str:
+    """构造与 artifact / warnings / meta 一致的 distill 摘要。"""
+
+    if status == ResultStatus.FAILURE:
+        return f"输入材料 {source_name} 提炼不足，未生成参考材料 {target_name}。"
+
+    if dry_run:
+        summary = f"已完成输入材料 {source_name} 的参考材料预演，目标为 {target_name}。"
+    else:
+        summary = f"已将输入材料 {source_name} 压缩为参考材料 {target_name}。"
+
+    notes: list[str] = []
+    if fallback_from:
+        notes.append("宿主模型结果不可用，已回退到规则提炼路径。")
+    if unresolved_sections:
+        notes.append(f"仍有 {len(unresolved_sections)} 类核心 section 待人工复核。")
+    if notes:
+        summary = f"{summary} {' '.join(notes)}"
+    return summary
 
 
 def _classify_distill_source(source_file: Path) -> str:
