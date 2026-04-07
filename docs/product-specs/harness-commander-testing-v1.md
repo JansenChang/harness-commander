@@ -25,9 +25,11 @@
 - `plan-check`：`docs/product-specs/v1/commands/plan-check/testing.md`
 - `sync`：`docs/product-specs/v1/commands/sync/testing.md`
 - `distill`：`docs/product-specs/v1/commands/distill/testing.md`
+- `install-provider`：`docs/product-specs/v1/commands/install-provider/testing.md`
 - `check`：`docs/product-specs/v1/commands/check/testing.md`
 - `collect-evidence`：`docs/product-specs/v1/commands/collect-evidence/testing.md`
+- `run-agents`：`docs/product-specs/v1/commands/run-agents/testing.md`
 
 ## 执行计划入口
 
-- 当前执行计划：`docs/exec-plans/active/harness-commander-v1/`
+- 当前执行计划：`docs/exec-plans/active/harness-commander-v1/index.md`

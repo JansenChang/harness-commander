@@ -1,0 +1,757 @@
+==> editable install
+==> editable install
+Obtaining file:///Users/jansen/project/python/harness-commander
+Obtaining file:///Users/jansen/project/python/harness-commander
+Obtaining file:///Users/jansen/project/python/harness-commander
+  Installing build dependencies: started
+Obtaining file:///Users/jansen/project/python/harness-commander
+  Installing build dependencies: started
+Obtaining file:///Users/jansen/project/python/harness-commander
+  Installing build dependencies: started
+  Installing build dependencies: started
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): started
+Building wheels for collected packages: harness-commander
+  Building editable for harness-commander (pyproject.toml): started
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Building wheels for collected packages: harness-commander
+  Building editable for harness-commander (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Building wheels for collected packages: harness-commander
+  Building editable for harness-commander (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+Building wheels for collected packages: harness-commander
+  Building editable for harness-commander (pyproject.toml): started
+  Building editable for harness-commander (pyproject.toml): finished with status 'done'
+  Created wheel for harness-commander: filename=harness_commander-0.1.0-0.editable-py3-none-any.whl size=7756 sha256=7c0a5c47c981cd077a9b2f42a41b70d4ce6fe726c6dba59e3da5f75a3c6ee413
+  Stored in directory: /private/var/folders/85/h3l3m68x7z1b_hs7mc14g8fc0000gn/T/pip-ephem-wheel-cache-0u92fvy9/wheels/20/ca/cb/0361914cca52fb883318900f2438ae562b0643cf7e8dbe7b33
+Successfully built harness-commander
+Installing collected packages: harness-commander
+  Attempting uninstall: harness-commander
+    Found existing installation: harness-commander 0.1.0
+    Uninstalling harness-commander-0.1.0:
+      Successfully uninstalled harness-commander-0.1.0
+Successfully installed harness-commander-0.1.0
+
+[notice] A new release of pip is available: 26.0 -> 26.0.1
+[notice] To update, run: /Users/jansen/project/python/harness-commander/.venv/bin/python -m pip install --upgrade pip
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Building wheels for collected packages: harness-commander
+  Building editable for harness-commander (pyproject.toml): started
+  Building editable for harness-commander (pyproject.toml): finished with status 'done'
+  Created wheel for harness-commander: filename=harness_commander-0.1.0-0.editable-py3-none-any.whl size=7756 sha256=7c0a5c47c981cd077a9b2f42a41b70d4ce6fe726c6dba59e3da5f75a3c6ee413
+  Stored in directory: /private/var/folders/85/h3l3m68x7z1b_hs7mc14g8fc0000gn/T/pip-ephem-wheel-cache-88aa_gnb/wheels/20/ca/cb/0361914cca52fb883318900f2438ae562b0643cf7e8dbe7b33
+  Building editable for harness-commander (pyproject.toml): finished with status 'done'
+Successfully built harness-commander
+  Created wheel for harness-commander: filename=harness_commander-0.1.0-0.editable-py3-none-any.whl size=7756 sha256=7c0a5c47c981cd077a9b2f42a41b70d4ce6fe726c6dba59e3da5f75a3c6ee413
+  Stored in directory: /private/var/folders/85/h3l3m68x7z1b_hs7mc14g8fc0000gn/T/pip-ephem-wheel-cache-rkw79goj/wheels/20/ca/cb/0361914cca52fb883318900f2438ae562b0643cf7e8dbe7b33
+Successfully built harness-commander
+Installing collected packages: harness-commander
+  Attempting uninstall: harness-commander
+    Found existing installation: harness-commander 0.1.0
+Installing collected packages: harness-commander
+  Attempting uninstall: harness-commander
+    Uninstalling harness-commander-0.1.0:
+    Found existing installation: harness-commander 0.1.0
+    Uninstalling harness-commander-0.1.0:
+  Building editable for harness-commander (pyproject.toml): finished with status 'done'
+  Created wheel for harness-commander: filename=harness_commander-0.1.0-0.editable-py3-none-any.whl size=7756 sha256=7c0a5c47c981cd077a9b2f42a41b70d4ce6fe726c6dba59e3da5f75a3c6ee413
+  Stored in directory: /private/var/folders/85/h3l3m68x7z1b_hs7mc14g8fc0000gn/T/pip-ephem-wheel-cache-io9i3nwd/wheels/20/ca/cb/0361914cca52fb883318900f2438ae562b0643cf7e8dbe7b33
+Successfully built harness-commander
+==> pytest
+Installing collected packages: harness-commander
+  Attempting uninstall: harness-commander
+    Found existing installation: harness-commander 0.1.0
+      Successfully uninstalled harness-commander-0.1.0
+    Uninstalling harness-commander-None:
+ERROR: Could not install packages due to an OSError: [Errno 2] No such file or directory: '/Users/jansen/project/python/harness-commander/.venv/bin/harness'
+
+WARNING: Ignoring invalid distribution ~arness-commander (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+WARNING: Ignoring invalid distribution ~arness-commander (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+
+[notice] A new release of pip is available: 26.0 -> 26.0.1
+[notice] To update, run: /Users/jansen/project/python/harness-commander/.venv/bin/python -m pip install --upgrade pip
+Successfully installed harness-commander-0.1.0
+
+[notice] A new release of pip is available: 26.0 -> 26.0.1
+[notice] To update, run: /Users/jansen/project/python/harness-commander/.venv/bin/python -m pip install --upgrade pip
+      Successfully uninstalled harness-commander-None
+Successfully installed harness-commander-0.1.0
+
+[notice] A new release of pip is available: 26.0 -> 26.0.1
+[notice] To update, run: /Users/jansen/project/python/harness-commander/.venv/bin/python -m pip install --upgrade pip
+==> pytest
+==> pytest
+==> pytest
+  Building editable for harness-commander (pyproject.toml): finished with status 'done'
+  Created wheel for harness-commander: filename=harness_commander-0.1.0-0.editable-py3-none-any.whl size=7756 sha256=7c0a5c47c981cd077a9b2f42a41b70d4ce6fe726c6dba59e3da5f75a3c6ee413
+  Stored in directory: /private/var/folders/85/h3l3m68x7z1b_hs7mc14g8fc0000gn/T/pip-ephem-wheel-cache-s2e6fah3/wheels/20/ca/cb/0361914cca52fb883318900f2438ae562b0643cf7e8dbe7b33
+Successfully built harness-commander
+Installing collected packages: harness-commander
+  Attempting uninstall: harness-commander
+    Found existing installation: harness-commander 0.1.0
+    Uninstalling harness-commander-0.1.0:
+      Successfully uninstalled harness-commander-0.1.0
+Successfully installed harness-commander-0.1.0
+
+[notice] A new release of pip is available: 26.0 -> 26.0.1
+[notice] To update, run: /Users/jansen/project/python/harness-commander/.venv/bin/python -m pip install --upgrade pip
+==> pytest
+FF..F.............................................................................................................................................................................................................................               [100%]...........               [100%].........               [100%].......
+=================================== FAILURES ===================================
+___________________ test_harness_help_from_editable_install ____________________
+
+    def test_harness_help_from_editable_install() -> None:
+        """可编辑安装后应能直接调用 harness --help。"""
+    
+        result = subprocess.run(
+            ["harness", "--help"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=harness_env(),
+        )
+>       assert result.returncode == 0, result.stderr
+E       AssertionError: 
+E       assert -9 == 0
+E        +  where -9 = CompletedProcess(args=['harness', '--help'], returncode=-9, stdout='', stderr='').returncode
+
+tests/acceptance/test_packaging_and_skill.py:58: AssertionError
+=========================== short test summary info ============================
+FAILED tests/acceptance/test_packaging_and_skill.py::test_harness_help_from_editable_install
+1 failed, 57 passed in 2.65s
+.
+=================================== FAILURES ===================================
+___________________ test_harness_help_from_editable_install ____________________
+
+    def test_harness_help_from_editable_install() -> None:
+        """可编辑安装后应能直接调用 harness --help。"""
+    
+        result = subprocess.run(
+            ["harness", "--help"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=harness_env(),
+        )
+>       assert result.returncode == 0, result.stderr
+E       AssertionError: 
+E       assert -9 == 0
+E        +  where -9 = CompletedProcess(args=['harness', '--help'], returncode=-9, stdout='', stderr='').returncode
+
+tests/acceptance/test_packaging_and_skill.py:58: AssertionError
+=========================== short test summary info ============================
+FAILED tests/acceptance/test_packaging_and_skill.py::test_harness_help_from_editable_install
+1 failed, 57 passed in 2.63s
+.
+=================================== FAILURES ===================================
+___________________ test_harness_help_from_editable_install ____________________
+
+    def test_harness_help_from_editable_install() -> None:
+        """可编辑安装后应能直接调用 harness --help。"""
+    
+        result = subprocess.run(
+            ["harness", "--help"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=harness_env(),
+        )
+>       assert result.returncode == 0, result.stderr
+E       AssertionError: 
+E       assert -9 == 0
+E        +  where -9 = CompletedProcess(args=['harness', '--help'], returncode=-9, stdout='', stderr='').returncode
+
+tests/acceptance/test_packaging_and_skill.py:58: AssertionError
+=========================== short test summary info ============================
+FAILED tests/acceptance/test_packaging_and_skill.py::test_harness_help_from_editable_install
+1 failed, 57 passed in 2.66s
+...................................               [100%]               [100%]
+58 passed in 2.85s
+
+58 passed in 2.61s
+==> mypy src
+==> mypy src
+==> mypy src
+==> mypy src
+==> mypy src
+src/harness_commander/application/host_providers.py:216: error: Argument 2 to "_detect_host_environment" has incompatible type "dict[str, str] | _Environ[str]"; expected "dict[str, str]"  [arg-type]
+src/harness_commander/application/host_providers.py:217: error: Argument 2 to "_resolve_provider_target_dir" has incompatible type "dict[str, str] | _Environ[str]"; expected "dict[str, str]"  [arg-type]
+src/harness_commander/application/host_providers.py:285: error: Statement is unreachable  [unreachable]
+src/harness_commander/application/host_providers.py:216: error: Argument 2 to "_detect_host_environment" has incompatible type "dict[str, str] | _Environ[str]"; expected "dict[str, str]"  [arg-type]
+src/harness_commander/application/host_providers.py:217: error: Argument 2 to "_resolve_provider_target_dir" has incompatible type "dict[str, str] | _Environ[str]"; expected "dict[str, str]"  [arg-type]
+src/harness_commander/application/host_providers.py:285: error: Statement is unreachable  [unreachable]
+src/harness_commander/application/host_providers.py:216: error: Argument 2 to "_detect_host_environment" has incompatible type "dict[str, str] | _Environ[str]"; expected "dict[str, str]"  [arg-type]
+src/harness_commander/application/host_providers.py:217: error: Argument 2 to "_resolve_provider_target_dir" has incompatible type "dict[str, str] | _Environ[str]"; expected "dict[str, str]"  [arg-type]
+src/harness_commander/application/host_providers.py:285: error: Statement is unreachable  [unreachable]
+Found 3 errors in 1 file (checked 10 source files)
+Found 3 errors in 1 file (checked 10 source files)
+==> acceptance smoke
+==> acceptance smoke
+Found 3 errors in 1 file (checked 10 source files)
+==> acceptance smoke
+src/harness_commander/application/host_providers.py:216: error: Argument 2 to "_detect_host_environment" has incompatible type "dict[str, str] | _Environ[str]"; expected "dict[str, str]"  [arg-type]
+src/harness_commander/application/host_providers.py:217: error: Argument 2 to "_resolve_provider_target_dir" has incompatible type "dict[str, str] | _Environ[str]"; expected "dict[str, str]"  [arg-type]
+src/harness_commander/application/host_providers.py:285: error: Statement is unreachable  [unreachable]
+Found 3 errors in 1 file (checked 10 source files)
+src/harness_commander/application/host_providers.py:216: error: Argument 2 to "_detect_host_environment" has incompatible type "dict[str, str] | _Environ[str]"; expected "dict[str, str]"  [arg-type]
+src/harness_commander/application/host_providers.py:217: error: Argument 2 to "_resolve_provider_target_dir" has incompatible type "dict[str, str] | _Environ[str]"; expected "dict[str, str]"  [arg-type]
+src/harness_commander/application/host_providers.py:285: error: Statement is unreachable  [unreachable]
+Found 3 errors in 1 file (checked 10 source files)
+==> acceptance smoke
+==> acceptance smoke
+EEEEEEEEEEEE                                                                 [100%]EEEE                                                                 [100%]
+==================================== ERRORS ====================================
+__________ ERROR at setup of test_harness_help_from_editable_install ___________
+
+    @pytest.fixture(scope="module", autouse=True)
+    def ensure_editable_install() -> None:
+        """在当前测试解释器环境中完成可编辑安装。"""
+    
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-e", "."],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=harness_env(),
+        )
+>       assert result.returncode == 0, result.stderr
+E       AssertionError:     WARNING: Ignoring invalid distribution ~arness-commander (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E           ERROR: Can't roll back harness-commander; was not uninstalled
+E         ERROR: Could not install packages due to an OSError: [Errno 2] No such file or directory: '/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages/harness_commander-0.1.0.dist-info/entry_points.txt'
+E         
+E         WARNING: Ignoring invalid distribution ~arness-commander (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         WARNING: Ignoring invalid distribution ~ (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         WARNING: Ignoring invalid distribution ~ (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         
+E         [notice] A new release of pip is available: 26.0 -> 26.0.1
+E         [notice] To update, run: pip install --upgrade pip
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/Users/jansen/project/python/harness-commander/.venv/bin/python', '-m', 'pip', 'install', '-e'...)\n\n[notice] A new release of pip is available: 26.0 -> 26.0.1\n[notice] To update, run: pip install --upgrade pip\n").returncode
+
+tests/acceptance/test_packaging_and_skill.py:36: AssertionError
+______ ERROR at setup of test_skill_source_file_exists_and_wraps_harness _______
+
+    @pytest.fixture(scope="module", autouse=True)
+    def ensure_editable_install() -> None:
+        """在当前测试解释器环境中完成可编辑安装。"""
+    
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-e", "."],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=harness_env(),
+        )
+>       assert result.returncode == 0, result.stderr
+E       AssertionError:     WARNING: Ignoring invalid distribution ~arness-commander (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E           ERROR: Can't roll back harness-commander; was not uninstalled
+E         ERROR: Could not install packages due to an OSError: [Errno 2] No such file or directory: '/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages/harness_commander-0.1.0.dist-info/entry_points.txt'
+E         
+E         WARNING: Ignoring invalid distribution ~arness-commander (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         WARNING: Ignoring invalid distribution ~ (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         WARNING: Ignoring invalid distribution ~ (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         
+E         [notice] A new release of pip is available: 26.0 -> 26.0.1
+E         [notice] To update, run: pip install --upgrade pip
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/Users/jansen/project/python/harness-commander/.venv/bin/python', '-m', 'pip', 'install', '-e'...)\n\n[notice] A new release of pip is available: 26.0 -> 26.0.1\n[notice] To update, run: pip install --upgrade pip\n").returncode
+
+tests/acceptance/test_packaging_and_skill.py:36: AssertionError
+_ ERROR at setup of test_install_and_uninstall_skill_scripts_manage_project_skill _
+
+    @pytest.fixture(scope="module", autouse=True)
+    def ensure_editable_install() -> None:
+        """在当前测试解释器环境中完成可编辑安装。"""
+    
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-e", "."],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=harness_env(),
+        )
+>       assert result.returncode == 0, result.stderr
+E       AssertionError:     WARNING: Ignoring invalid distribution ~arness-commander (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E           ERROR: Can't roll back harness-commander; was not uninstalled
+E         ERROR: Could not install packages due to an OSError: [Errno 2] No such file or directory: '/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages/harness_commander-0.1.0.dist-info/entry_points.txt'
+E         
+E         WARNING: Ignoring invalid distribution ~arness-commander (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         WARNING: Ignoring invalid distribution ~ (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         WARNING: Ignoring invalid distribution ~ (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         
+E         [notice] A new release of pip is available: 26.0 -> 26.0.1
+E         [notice] To update, run: pip install --upgrade pip
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/Users/jansen/project/python/harness-commander/.venv/bin/python', '-m', 'pip', 'install', '-e'...)\n\n[notice] A new release of pip is available: 26.0 -> 26.0.1\n[notice] To update, run: pip install --upgrade pip\n").returncode
+
+tests/acceptance/test_packaging_and_skill.py:36: AssertionError
+_____ ERROR at setup of test_install_skill_reports_missing_harness_command _____
+
+    @pytest.fixture(scope="module", autouse=True)
+    def ensure_editable_install() -> None:
+        """在当前测试解释器环境中完成可编辑安装。"""
+    
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-e", "."],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=harness_env(),
+        )
+>       assert result.returncode == 0, result.stderr
+E       AssertionError:     WARNING: Ignoring invalid distribution ~arness-commander (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E           ERROR: Can't roll back harness-commander; was not uninstalled
+E         ERROR: Could not install packages due to an OSError: [Errno 2] No such file or directory: '/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages/harness_commander-0.1.0.dist-info/entry_points.txt'
+E         
+E         WARNING: Ignoring invalid distribution ~arness-commander (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         WARNING: Ignoring invalid distribution ~ (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         WARNING: Ignoring invalid distribution ~ (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         
+E         [notice] A new release of pip is available: 26.0 -> 26.0.1
+E         [notice] To update, run: pip install --upgrade pip
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/Users/jansen/project/python/harness-commander/.venv/bin/python', '-m', 'pip', 'install', '-e'...)\n\n[notice] A new release of pip is available: 26.0 -> 26.0.1\n[notice] To update, run: pip install --upgrade pip\n").returncode
+
+tests/acceptance/test_packaging_and_skill.py:36: AssertionError
+_ ERROR at setup of test_install_provider_claude_creates_project_config_and_user_skill _
+
+    @pytest.fixture(scope="module", autouse=True)
+    def ensure_editable_install() -> None:
+        """在当前测试解释器环境中完成可编辑安装。"""
+    
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-e", "."],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=harness_env(),
+        )
+>       assert result.returncode == 0, result.stderr
+E       AssertionError:     WARNING: Ignoring invalid distribution ~arness-commander (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E           ERROR: Can't roll back harness-commander; was not uninstalled
+E         ERROR: Could not install packages due to an OSError: [Errno 2] No such file or directory: '/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages/harness_commander-0.1.0.dist-info/entry_points.txt'
+E         
+E         WARNING: Ignoring invalid distribution ~arness-commander (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         WARNING: Ignoring invalid distribution ~ (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         WARNING: Ignoring invalid distribution ~ (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         
+E         [notice] A new release of pip is available: 26.0 -> 26.0.1
+E         [notice] To update, run: pip install --upgrade pip
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/Users/jansen/project/python/harness-commander/.venv/bin/python', '-m', 'pip', 'install', '-e'...)\n\n[notice] A new release of pip is available: 26.0 -> 26.0.1\n[notice] To update, run: pip install --upgrade pip\n").returncode
+
+tests/acceptance/test_packaging_and_skill.py:36: AssertionError
+_________ ERROR at setup of test_install_provider_auto_records_results _________
+
+    @pytest.fixture(scope="module", autouse=True)
+    def ensure_editable_install() -> None:
+        """在当前测试解释器环境中完成可编辑安装。"""
+    
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-e", "."],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=harness_env(),
+        )
+>       assert result.returncode == 0, result.stderr
+E       AssertionError:     WARNING: Ignoring invalid distribution ~arness-commander (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E           ERROR: Can't roll back harness-commander; was not uninstalled
+E         ERROR: Could not install packages due to an OSError: [Errno 2] No such file or directory: '/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages/harness_commander-0.1.0.dist-info/entry_points.txt'
+E         
+E         WARNING: Ignoring invalid distribution ~arness-commander (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         WARNING: Ignoring invalid distribution ~ (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         WARNING: Ignoring invalid distribution ~ (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         
+E         [notice] A new release of pip is available: 26.0 -> 26.0.1
+E         [notice] To update, run: pip install --upgrade pip
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/Users/jansen/project/python/harness-commander/.venv/bin/python', '-m', 'pip', 'install', '-e'...)\n\n[notice] A new release of pip is available: 26.0 -> 26.0.1\n[notice] To update, run: pip install --upgrade pip\n").returncode
+
+tests/acceptance/test_packaging_and_skill.py:36: AssertionError
+___________ ERROR at setup of test_install_provider_all_and_dry_run ____________
+
+    @pytest.fixture(scope="module", autouse=True)
+    def ensure_editable_install() -> None:
+        """在当前测试解释器环境中完成可编辑安装。"""
+    
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-e", "."],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=harness_env(),
+        )
+>       assert result.returncode == 0, result.stderr
+E       AssertionError:     WARNING: Ignoring invalid distribution ~arness-commander (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E           ERROR: Can't roll back harness-commander; was not uninstalled
+E         ERROR: Could not install packages due to an OSError: [Errno 2] No such file or directory: '/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages/harness_commander-0.1.0.dist-info/entry_points.txt'
+E         
+E         WARNING: Ignoring invalid distribution ~arness-commander (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         WARNING: Ignoring invalid distribution ~ (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         WARNING: Ignoring invalid distribution ~ (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         
+E         [notice] A new release of pip is available: 26.0 -> 26.0.1
+E         [notice] To update, run: pip install --upgrade pip
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/Users/jansen/project/python/harness-commander/.venv/bin/python', '-m', 'pip', 'install', '-e'...)\n\n[notice] A new release of pip is available: 26.0 -> 26.0.1\n[notice] To update, run: pip install --upgrade pip\n").returncode
+
+tests/acceptance/test_packaging_and_skill.py:36: AssertionError
+_____________ ERROR at setup of test_skill_smoke_init_and_distill ______________
+
+    @pytest.fixture(scope="module", autouse=True)
+    def ensure_editable_install() -> None:
+        """在当前测试解释器环境中完成可编辑安装。"""
+    
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-e", "."],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=harness_env(),
+        )
+>       assert result.returncode == 0, result.stderr
+E       AssertionError:     WARNING: Ignoring invalid distribution ~arness-commander (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E           ERROR: Can't roll back harness-commander; was not uninstalled
+E         ERROR: Could not install packages due to an OSError: [Errno 2] No such file or directory: '/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages/harness_commander-0.1.0.dist-info/entry_points.txt'
+E         
+E         WARNING: Ignoring invalid distribution ~arness-commander (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         WARNING: Ignoring invalid distribution ~ (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         WARNING: Ignoring invalid distribution ~ (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         
+E         [notice] A new release of pip is available: 26.0 -> 26.0.1
+E         [notice] To update, run: pip install --upgrade pip
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/Users/jansen/project/python/harness-commander/.venv/bin/python', '-m', 'pip', 'install', '-e'...)\n\n[notice] A new release of pip is available: 26.0 -> 26.0.1\n[notice] To update, run: pip install --upgrade pip\n").returncode
+
+tests/acceptance/test_packaging_and_skill.py:36: AssertionError
+=========================== short test summary info ============================
+ERROR tests/acceptance/test_packaging_and_skill.py::test_harness_help_from_editable_install
+ERROR tests/acceptance/test_packaging_and_skill.py::test_skill_source_file_exists_and_wraps_harness
+ERROR tests/acceptance/test_packaging_and_skill.py::test_install_and_uninstall_skill_scripts_manage_project_skill
+ERROR tests/acceptance/test_packaging_and_skill.py::test_install_skill_reports_missing_harness_command
+ERROR tests/acceptance/test_packaging_and_skill.py::test_install_provider_claude_creates_project_config_and_user_skill
+ERROR tests/acceptance/test_packaging_and_skill.py::test_install_provider_auto_records_results
+ERROR tests/acceptance/test_packaging_and_skill.py::test_install_provider_all_and_dry_run
+ERROR tests/acceptance/test_packaging_and_skill.py::test_skill_smoke_init_and_distill
+8 errors in 2.03s
+
+==================================== ERRORS ====================================
+__________ ERROR at setup of test_harness_help_from_editable_install ___________
+
+    @pytest.fixture(scope="module", autouse=True)
+    def ensure_editable_install() -> None:
+        """在当前测试解释器环境中完成可编辑安装。"""
+    
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-e", "."],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=harness_env(),
+        )
+>       assert result.returncode == 0, result.stderr
+E       AssertionError: WARNING: Ignoring invalid distribution ~arness-commander (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         ERROR: Could not install packages due to an OSError: [Errno 2] No such file or directory: '/Users/jansen/project/python/harness-commander/.venv/bin/harness'
+E         
+E         WARNING: Ignoring invalid distribution ~ (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         WARNING: Ignoring invalid distribution ~ (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         
+E         [notice] A new release of pip is available: 26.0 -> 26.0.1
+E         [notice] To update, run: pip install --upgrade pip
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/Users/jansen/project/python/harness-commander/.venv/bin/python', '-m', 'pip', 'install', '-e'...)\n\n[notice] A new release of pip is available: 26.0 -> 26.0.1\n[notice] To update, run: pip install --upgrade pip\n").returncode
+
+tests/acceptance/test_packaging_and_skill.py:36: AssertionError
+______ ERROR at setup of test_skill_source_file_exists_and_wraps_harness _______
+
+    @pytest.fixture(scope="module", autouse=True)
+    def ensure_editable_install() -> None:
+        """在当前测试解释器环境中完成可编辑安装。"""
+    
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-e", "."],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=harness_env(),
+        )
+>       assert result.returncode == 0, result.stderr
+E       AssertionError: WARNING: Ignoring invalid distribution ~arness-commander (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         ERROR: Could not install packages due to an OSError: [Errno 2] No such file or directory: '/Users/jansen/project/python/harness-commander/.venv/bin/harness'
+E         
+E         WARNING: Ignoring invalid distribution ~ (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         WARNING: Ignoring invalid distribution ~ (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         
+E         [notice] A new release of pip is available: 26.0 -> 26.0.1
+E         [notice] To update, run: pip install --upgrade pip
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/Users/jansen/project/python/harness-commander/.venv/bin/python', '-m', 'pip', 'install', '-e'...)\n\n[notice] A new release of pip is available: 26.0 -> 26.0.1\n[notice] To update, run: pip install --upgrade pip\n").returncode
+
+tests/acceptance/test_packaging_and_skill.py:36: AssertionError
+_ ERROR at setup of test_install_and_uninstall_skill_scripts_manage_project_skill _
+
+    @pytest.fixture(scope="module", autouse=True)
+    def ensure_editable_install() -> None:
+        """在当前测试解释器环境中完成可编辑安装。"""
+    
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-e", "."],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=harness_env(),
+        )
+>       assert result.returncode == 0, result.stderr
+E       AssertionError: WARNING: Ignoring invalid distribution ~arness-commander (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         ERROR: Could not install packages due to an OSError: [Errno 2] No such file or directory: '/Users/jansen/project/python/harness-commander/.venv/bin/harness'
+E         
+E         WARNING: Ignoring invalid distribution ~ (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         WARNING: Ignoring invalid distribution ~ (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         
+E         [notice] A new release of pip is available: 26.0 -> 26.0.1
+E         [notice] To update, run: pip install --upgrade pip
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/Users/jansen/project/python/harness-commander/.venv/bin/python', '-m', 'pip', 'install', '-e'...)\n\n[notice] A new release of pip is available: 26.0 -> 26.0.1\n[notice] To update, run: pip install --upgrade pip\n").returncode
+
+tests/acceptance/test_packaging_and_skill.py:36: AssertionError
+_____ ERROR at setup of test_install_skill_reports_missing_harness_command _____
+
+    @pytest.fixture(scope="module", autouse=True)
+    def ensure_editable_install() -> None:
+        """在当前测试解释器环境中完成可编辑安装。"""
+    
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-e", "."],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=harness_env(),
+        )
+>       assert result.returncode == 0, result.stderr
+E       AssertionError: WARNING: Ignoring invalid distribution ~arness-commander (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         ERROR: Could not install packages due to an OSError: [Errno 2] No such file or directory: '/Users/jansen/project/python/harness-commander/.venv/bin/harness'
+E         
+E         WARNING: Ignoring invalid distribution ~ (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         WARNING: Ignoring invalid distribution ~ (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         
+E         [notice] A new release of pip is available: 26.0 -> 26.0.1
+E         [notice] To update, run: pip install --upgrade pip
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/Users/jansen/project/python/harness-commander/.venv/bin/python', '-m', 'pip', 'install', '-e'...)\n\n[notice] A new release of pip is available: 26.0 -> 26.0.1\n[notice] To update, run: pip install --upgrade pip\n").returncode
+
+tests/acceptance/test_packaging_and_skill.py:36: AssertionError
+_ ERROR at setup of test_install_provider_claude_creates_project_config_and_user_skill _
+
+    @pytest.fixture(scope="module", autouse=True)
+    def ensure_editable_install() -> None:
+        """在当前测试解释器环境中完成可编辑安装。"""
+    
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-e", "."],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=harness_env(),
+        )
+>       assert result.returncode == 0, result.stderr
+E       AssertionError: WARNING: Ignoring invalid distribution ~arness-commander (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         ERROR: Could not install packages due to an OSError: [Errno 2] No such file or directory: '/Users/jansen/project/python/harness-commander/.venv/bin/harness'
+E         
+E         WARNING: Ignoring invalid distribution ~ (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         WARNING: Ignoring invalid distribution ~ (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         
+E         [notice] A new release of pip is available: 26.0 -> 26.0.1
+E         [notice] To update, run: pip install --upgrade pip
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/Users/jansen/project/python/harness-commander/.venv/bin/python', '-m', 'pip', 'install', '-e'...)\n\n[notice] A new release of pip is available: 26.0 -> 26.0.1\n[notice] To update, run: pip install --upgrade pip\n").returncode
+
+tests/acceptance/test_packaging_and_skill.py:36: AssertionError
+_________ ERROR at setup of test_install_provider_auto_records_results _________
+
+    @pytest.fixture(scope="module", autouse=True)
+    def ensure_editable_install() -> None:
+        """在当前测试解释器环境中完成可编辑安装。"""
+    
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-e", "."],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=harness_env(),
+        )
+>       assert result.returncode == 0, result.stderr
+E       AssertionError: WARNING: Ignoring invalid distribution ~arness-commander (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         ERROR: Could not install packages due to an OSError: [Errno 2] No such file or directory: '/Users/jansen/project/python/harness-commander/.venv/bin/harness'
+E         
+E         WARNING: Ignoring invalid distribution ~ (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         WARNING: Ignoring invalid distribution ~ (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         
+E         [notice] A new release of pip is available: 26.0 -> 26.0.1
+E         [notice] To update, run: pip install --upgrade pip
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/Users/jansen/project/python/harness-commander/.venv/bin/python', '-m', 'pip', 'install', '-e'...)\n\n[notice] A new release of pip is available: 26.0 -> 26.0.1\n[notice] To update, run: pip install --upgrade pip\n").returncode
+
+tests/acceptance/test_packaging_and_skill.py:36: AssertionError
+___________ ERROR at setup of test_install_provider_all_and_dry_run ____________
+
+    @pytest.fixture(scope="module", autouse=True)
+    def ensure_editable_install() -> None:
+        """在当前测试解释器环境中完成可编辑安装。"""
+    
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-e", "."],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=harness_env(),
+        )
+>       assert result.returncode == 0, result.stderr
+E       AssertionError: WARNING: Ignoring invalid distribution ~arness-commander (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         ERROR: Could not install packages due to an OSError: [Errno 2] No such file or directory: '/Users/jansen/project/python/harness-commander/.venv/bin/harness'
+E         
+E         WARNING: Ignoring invalid distribution ~ (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         WARNING: Ignoring invalid distribution ~ (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         
+E         [notice] A new release of pip is available: 26.0 -> 26.0.1
+E         [notice] To update, run: pip install --upgrade pip
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/Users/jansen/project/python/harness-commander/.venv/bin/python', '-m', 'pip', 'install', '-e'...)\n\n[notice] A new release of pip is available: 26.0 -> 26.0.1\n[notice] To update, run: pip install --upgrade pip\n").returncode
+
+tests/acceptance/test_packaging_and_skill.py:36: AssertionError
+_____________ ERROR at setup of test_skill_smoke_init_and_distill ______________
+
+    @pytest.fixture(scope="module", autouse=True)
+    def ensure_editable_install() -> None:
+        """在当前测试解释器环境中完成可编辑安装。"""
+    
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-e", "."],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=harness_env(),
+        )
+>       assert result.returncode == 0, result.stderr
+E       AssertionError: WARNING: Ignoring invalid distribution ~arness-commander (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         ERROR: Could not install packages due to an OSError: [Errno 2] No such file or directory: '/Users/jansen/project/python/harness-commander/.venv/bin/harness'
+E         
+E         WARNING: Ignoring invalid distribution ~ (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         WARNING: Ignoring invalid distribution ~ (/Users/jansen/project/python/harness-commander/.venv/lib/python3.14/site-packages)
+E         
+E         [notice] A new release of pip is available: 26.0 -> 26.0.1
+E         [notice] To update, run: pip install --upgrade pip
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/Users/jansen/project/python/harness-commander/.venv/bin/python', '-m', 'pip', 'install', '-e'...)\n\n[notice] A new release of pip is available: 26.0 -> 26.0.1\n[notice] To update, run: pip install --upgrade pip\n").returncode
+
+tests/acceptance/test_packaging_and_skill.py:36: AssertionError
+=========================== short test summary info ============================
+ERROR tests/acceptance/test_packaging_and_skill.py::test_harness_help_from_editable_install
+ERROR tests/acceptance/test_packaging_and_skill.py::test_skill_source_file_exists_and_wraps_harness
+ERROR tests/acceptance/test_packaging_and_skill.py::test_install_and_uninstall_skill_scripts_manage_project_skill
+ERROR tests/acceptance/test_packaging_and_skill.py::test_install_skill_reports_missing_harness_command
+ERROR tests/acceptance/test_packaging_and_skill.py::test_install_provider_claude_creates_project_config_and_user_skill
+ERROR tests/acceptance/test_packaging_and_skill.py::test_install_provider_auto_records_results
+ERROR tests/acceptance/test_packaging_and_skill.py::test_install_provider_all_and_dry_run
+ERROR tests/acceptance/test_packaging_and_skill.py::test_skill_smoke_init_and_distill
+8 errors in 2.08s
+.......F...............                                                                 [100%]                                                                 [100%].                                                                 [100%]
+=================================== FAILURES ===================================
+________ test_install_and_uninstall_skill_scripts_manage_project_skill _________
+
+    def test_install_and_uninstall_skill_scripts_manage_project_skill() -> None:
+        """安装与卸载脚本应管理项目级 skill 文件。"""
+    
+        if PROJECT_SKILL_FILE.exists():
+            PROJECT_SKILL_FILE.unlink()
+        if PROJECT_REFERENCE_FILE.exists():
+            PROJECT_REFERENCE_FILE.unlink()
+    
+        install_result = subprocess.run(
+            [str(INSTALL_SCRIPT)],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=harness_env(),
+        )
+>       assert install_result.returncode == 0, install_result.stderr
+E       AssertionError: cp: /Users/jansen/project/python/harness-commander/.claude/skills/harness/./SKILL.md: No such file or directory
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/Users/jansen/project/python/harness-commander/install-skill.sh'], returncode=1, stdout='', stderr='cp: /Users/jansen/project/python/harness-commander/.claude/skills/harness/./SKILL.md: No such file or directory\n').returncode
+
+tests/acceptance/test_packaging_and_skill.py:91: AssertionError
+=========================== short test summary info ============================
+FAILED tests/acceptance/test_packaging_and_skill.py::test_install_and_uninstall_skill_scripts_manage_project_skill
+1 failed, 7 passed in 2.46s
+
+8 passed in 2.46s
+
+8 passed in 2.43s

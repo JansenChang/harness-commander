@@ -19,5 +19,7 @@
 - `plan-check`：`docs/product-specs/v1/commands/plan-check/acceptance.md`
 - `sync`：`docs/product-specs/v1/commands/sync/acceptance.md`
 - `distill`：`docs/product-specs/v1/commands/distill/acceptance.md`
+- `install-provider`：`docs/product-specs/v1/commands/install-provider/acceptance.md`
 - `check`：`docs/product-specs/v1/commands/check/acceptance.md`
 - `collect-evidence`：`docs/product-specs/v1/commands/collect-evidence/acceptance.md`
+- `run-agents`：`docs/product-specs/v1/commands/run-agents/acceptance.md`

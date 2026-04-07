@@ -13,8 +13,10 @@
 - `plan-check`：`docs/product-specs/v1/commands/plan-check/protocol.md`
 - `sync`：`docs/product-specs/v1/commands/sync/protocol.md`
 - `distill`：`docs/product-specs/v1/commands/distill/protocol.md`
+- `install-provider`：`docs/product-specs/v1/commands/install-provider/protocol.md`
 - `check`：`docs/product-specs/v1/commands/check/protocol.md`
 - `collect-evidence`：`docs/product-specs/v1/commands/collect-evidence/protocol.md`
+- `run-agents`：`docs/product-specs/v1/commands/run-agents/protocol.md`
 
 ## 全局约束
 

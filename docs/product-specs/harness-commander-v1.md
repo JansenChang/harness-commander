@@ -26,6 +26,7 @@ V1 的核心目标不是让 Harness 替代 Claude、Cursor、Codex、OpenClaw、
 - `plan-check`：[product](./v1/commands/plan-check/product.md) / [protocol](./v1/commands/plan-check/protocol.md) / [testing](./v1/commands/plan-check/testing.md) / [acceptance](./v1/commands/plan-check/acceptance.md)
 - `sync`：[product](./v1/commands/sync/product.md) / [protocol](./v1/commands/sync/protocol.md) / [testing](./v1/commands/sync/testing.md) / [acceptance](./v1/commands/sync/acceptance.md)
 - `distill`：[product](./v1/commands/distill/product.md) / [protocol](./v1/commands/distill/protocol.md) / [testing](./v1/commands/distill/testing.md) / [acceptance](./v1/commands/distill/acceptance.md)
+- `install-provider`：[product](./v1/commands/install-provider/product.md) / [protocol](./v1/commands/install-provider/protocol.md) / [testing](./v1/commands/install-provider/testing.md) / [acceptance](./v1/commands/install-provider/acceptance.md)
 - `check`：[product](./v1/commands/check/product.md) / [protocol](./v1/commands/check/protocol.md) / [testing](./v1/commands/check/testing.md) / [acceptance](./v1/commands/check/acceptance.md)
 - `collect-evidence`：[product](./v1/commands/collect-evidence/product.md) / [protocol](./v1/commands/collect-evidence/protocol.md) / [testing](./v1/commands/collect-evidence/testing.md) / [acceptance](./v1/commands/collect-evidence/acceptance.md)
 - `run-agents`：[product](./v1/commands/run-agents/product.md) / [protocol](./v1/commands/run-agents/protocol.md) / [testing](./v1/commands/run-agents/testing.md) / [acceptance](./v1/commands/run-agents/acceptance.md)
@@ -34,4 +35,4 @@ V1 的核心目标不是让 Harness 替代 Claude、Cursor、Codex、OpenClaw、
 
 - 测试标准按命令维护在各命令目录下的 `testing.md`
 - 验收标准按命令维护在各命令目录下的 `acceptance.md`
-- 当前执行计划见 `docs/exec-plans/active/harness-commander-v1/`
+- 当前执行计划见 `docs/exec-plans/active/harness-commander-v1/index.md`
