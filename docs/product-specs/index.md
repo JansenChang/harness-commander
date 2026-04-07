@@ -19,10 +19,16 @@
 
 ## 当前主入口
 
-- `Harness-Commander V1 命令导航`：`docs/product-specs/v1/index.md`
+- `Harness-Commander V2 命令导航（草案）`：`docs/product-specs/v2/index.md`
+- `Harness-Commander V1 命令导航（已实现基线）`：`docs/product-specs/v1/index.md`
 
 ## 当前需求文档
 
+- `V2 总导航`：`docs/product-specs/v2/index.md`
+- `V2 run-agents`：`docs/product-specs/v2/commands/run-agents/product.md`
+- `V2 distill`：`docs/product-specs/v2/commands/distill/product.md`
+- `V2 check`：`docs/product-specs/v2/commands/check/product.md`
+- `V2 install-provider`：`docs/product-specs/v2/commands/install-provider/product.md`
 - `init`：`docs/product-specs/v1/commands/init/product.md`
 - `propose-plan`：`docs/product-specs/v1/commands/propose-plan/product.md`
 - `plan-check`：`docs/product-specs/v1/commands/plan-check/product.md`
@@ -36,6 +42,7 @@
 - `新用户引导`：`docs/product-specs/new-user-onboarding.md`
 - `Init 模板规范`：`docs/design-docs/init-templates.md`
 - `打包与 Skill 集成`：`docs/product-specs/packaging-as-skill.md`
+- `Distill 宿主模型轻量参考`：`docs/references/distill-host-model-reference-llms.txt`
 
 ## 历史与兼容入口
 
