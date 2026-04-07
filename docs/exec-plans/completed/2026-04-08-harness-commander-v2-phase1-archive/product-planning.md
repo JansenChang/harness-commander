@@ -124,8 +124,6 @@
   - `run-agents` 接入 `check` 治理前置门
   - `distill` integration failure / edge path 补洞
   - `check` ready integration 补洞
-  - `distill` summary / artifact / meta 一致性补洞
-  - `run-agents` 显式 `--plan` preflight override 覆盖
 - 已启动：
   - `run-agents` 命令级执行计划：`run-agents-stage-contracts.md`
   - `check` 命令级执行计划：`check-governance-entry.md`
@@ -135,8 +133,8 @@
   - `check` ready 集成覆盖计划：`check-ready-integration-coverage.md`
 - 当前选择：
   - 已完成 `run-agents` / `check` / `distill` 当前这批最小补洞切片
-  - 当前可将 V2 Phase 1 视为完成，并进入归档 / 下一轮立项状态
-  - 继续保持 deterministic baseline；后续若进入 V2 Phase 2，再规划宿主模型默认主路径
+  - 当前先停在文档收口状态，等待确认下一轮优先级
+  - 继续保持 deterministic baseline，再规划宿主模型默认主路径
 
 ## References
 

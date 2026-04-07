@@ -19,7 +19,7 @@
 
 ## 当前主入口
 
-- `Harness-Commander V2 命令导航（草案）`：`docs/product-specs/v2/index.md`
+- `Harness-Commander V2 命令导航（Phase 1 已完成）`：`docs/product-specs/v2/index.md`
 - `Harness-Commander V1 命令导航（已实现基线）`：`docs/product-specs/v1/index.md`
 
 ## 当前需求文档

@@ -22,8 +22,8 @@
 ### 当前阶段
 
 - Harness-Commander V1 的 CLI 主命令集已经落地，本轮执行层硬化已归档完成。
-- 项目当前处于“V2 最小闭环命令级规划 + 第三轮实现”阶段。
-- 当前 active 计划已重新开启，入口位于 `docs/exec-plans/active/harness-commander-v2/`。
+- 项目当前已完成“V2 Phase 1 最小闭环命令级规划 + 实现收口”。
+- 当前 active 计划已归档，下一轮若继续推进 V2，应重新开启新的 active 入口。
 
 ### 命令状态快照
 
@@ -44,8 +44,8 @@
 - 已完成 `run-agents` Phase 1 阶段合同基线、显式 `--plan` preflight override 覆盖、`check` 治理入口基线，以及 `distill` 的来源映射与 summary / artifact / meta 一致性补洞。
 - 保持默认不依赖宿主模型，先收敛 deterministic baseline，再为后续宿主模型主路径留出结构化边界。
 - 当前下一轮优先考虑：
-  - `run-agents` 与 `check` 的进一步联动硬化
-  - 把最新 `distill` 进展回写到更上层 active / roadmap 文档
+  - 重新立项 V2 Phase 2：`distill` / `run-agents` 默认优先宿主模型，失败 fallback
+  - 或继续推进 `run-agents` 与 `check` 的更强联动硬化
   - 在继续扩大 schema 前保持当前 deterministic baseline 稳定
 
 ### 当前阻塞与风险
@@ -57,10 +57,7 @@
 
 ### 当前 active 入口
 
-- V2 active 索引：`docs/exec-plans/active/harness-commander-v2/index.md`
-- 当前主计划：`docs/exec-plans/active/harness-commander-v2/product-planning.md`
-- 当前命令级执行计划：
-  - `docs/exec-plans/active/harness-commander-v2/run-agents-stage-contracts.md`
-  - `docs/exec-plans/active/harness-commander-v2/check-governance-entry.md`
-  - `docs/exec-plans/active/harness-commander-v2/distill-source-mapping.md`
+- 当前 V2 Phase 1 已归档：
+  - `docs/exec-plans/completed/2026-04-08-harness-commander-v2-phase1-archive.md`
+  - `docs/exec-plans/completed/2026-04-08-harness-commander-v2-phase1-archive/`
 - 已归档入口：`docs/exec-plans/completed/2026-04-07-harness-commander-v1-exec-archive.md`

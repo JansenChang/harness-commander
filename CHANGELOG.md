@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - Added `run-agents` CLI and integration coverage for missing spec/plan, invalid plan documents, non-PASS verify states, dry-run PR summary behavior, empty verification summary fallback, and PR summary path collision avoidance.
 - Added CLI and integration coverage for `distill` summary consistency across dry-run and host-model fallback paths.
 - Added `run-agents` CLI and integration coverage for explicit `--plan` preflight overrides when the default active plan target is missing.
+- Added V2 Phase 1 archive records and updated top-level planning docs to mark the minimal closed loop complete.
 
 ## [0.1.0] - 2026-04-06
 
