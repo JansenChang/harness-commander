@@ -86,3 +86,16 @@
 - 关联测试：`tests/test_cli.py`、`tests/test_integration.py`
 - 关联文档：`docs/product-specs/v2/commands/run-agents/protocol.md`、`docs/exec-plans/active/harness-commander-v2/run-agents-stage-contracts.md`
 - 关闭条件：`implement` / `docs` / 后续治理阶段进入真实可恢复 runtime，并沿用当前阶段合同协议。
+
+### [open] check Phase 1 的 health_score 仍是启发式治理指标
+
+- 日期：2026-04-07
+- 类型：`temporary-fix`
+- 范围：`check` V2 Phase 1、治理入口结果协议
+- 现象：`check` 已输出 `health_score`、`governance_entry`、`next_actions`，但 `health_score` 当前只是 deterministic 启发式分数，不代表完整真实风险。
+- 根因：本轮优先目标是把 `check` 从问题清单升级为治理入口，而不是一次性完成按规则域分段、跨命令消费和强门禁设计。
+- 当前处理：已明确 blocking / warning 事实仍优先于 `health_score`，并把治理入口推荐逻辑写入结果协议。
+- 防复发：后续任何命令若消费 `health_score`，必须同时读取 `blocking_count`、`warning_count` 与 `governance_entry.status`，不能单独用分数做通过判断。
+- 关联测试：`tests/test_cli.py`、`tests/test_integration.py`
+- 关联文档：`docs/product-specs/v2/commands/check/protocol.md`、`docs/exec-plans/active/harness-commander-v2/check-governance-entry.md`
+- 关闭条件：`check` 的健康度模型按规则域分层，并与前置门 / 自动消费协议正式定版。

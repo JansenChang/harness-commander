@@ -1076,6 +1076,24 @@ def test_check_reports_blocking_issue_with_required_metadata(
     assert issue["detail"]["suggestion"]
     assert issue["detail"]["impact_scope"] == "仓库包含疑似明文凭据，存在泄露和误用风险。"
     assert payload["summary"].startswith("审计完成，发现")
+    meta = payload["meta"]
+    assert isinstance(meta["health_score"], int)
+    assert 0 <= meta["health_score"] <= 100
+    governance_entry = meta["governance_entry"]
+    assert governance_entry["status"] == "blocked"
+    assert governance_entry["ready_for_run_agents"] is False
+    assert governance_entry["ready_for_clean_pass"] is False
+    assert isinstance(governance_entry["recommended_entrypoint"], str)
+    assert governance_entry["recommended_entrypoint"]
+    next_actions = meta["next_actions"]
+    assert isinstance(next_actions, list)
+    assert next_actions
+    assert any(
+        isinstance(action, dict)
+        and isinstance(action.get("summary"), str)
+        and action["summary"]
+        for action in next_actions
+    )
 
 
 def test_check_marks_template_only_governance_docs_as_unquantified(
@@ -1112,6 +1130,15 @@ def test_check_marks_template_only_governance_docs_as_unquantified(
     assert all(not warning["detail"]["quantifiable"] for warning in unquantified_warnings)
     assert all("impact_scope" in warning["detail"] for warning in unquantified_warnings)
     assert "未量化" in payload["summary"]
+    governance_entry = payload["meta"]["governance_entry"]
+    assert governance_entry["status"] == "needs_attention"
+    assert governance_entry["ready_for_run_agents"] is False
+    assert isinstance(governance_entry["recommended_entrypoint"], str)
+    assert governance_entry["recommended_entrypoint"]
+    next_actions = payload["meta"]["next_actions"]
+    assert isinstance(next_actions, list)
+    assert next_actions
+    assert payload["meta"]["health_score"] < 100
 
 
 def test_check_reports_default_targets_in_meta(tmp_path: Path, capsys) -> None:
@@ -1130,9 +1157,13 @@ def test_check_reports_default_targets_in_meta(tmp_path: Path, capsys) -> None:
     payload = json.loads(captured.out)
 
     assert exit_code == 0
+    assert payload["meta"]["checks"]["all"]
     checked_targets = payload["meta"]["checked_targets"]
     assert checked_targets["plan_files"] == ["docs/exec-plans/active/demo.md"]
     assert checked_targets["generated_files"] == ["docs/references/demo-llms.txt"]
+    governance_entry = payload["meta"]["governance_entry"]
+    assert governance_entry["ready_for_run_agents"] is True
+    assert governance_entry["status"] in {"needs_attention", "ready"}
 
 
 def test_sync_returns_governance_snapshot_when_only_baseline_exists(

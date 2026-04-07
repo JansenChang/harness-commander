@@ -1032,6 +1032,153 @@ def _build_check_issue(
     )
 
 
+def _compute_check_health_score(
+    *,
+    blocking_count: int,
+    warning_count: int,
+    unquantified_count: int,
+) -> int:
+    """计算治理健康度分数（0-100，deterministic）。"""
+
+    score = 100 - (blocking_count * 35) - (warning_count * 7) - (unquantified_count * 3)
+    return max(0, min(100, score))
+
+
+def _build_check_governance_entry(
+    *,
+    blocking_count: int,
+    warning_count: int,
+    has_active_plan: bool,
+) -> dict[str, Any]:
+    """构造 check 的治理入口判定。"""
+
+    if blocking_count > 0:
+        status = "blocked"
+        recommended_entrypoint = "harness check"
+        rationale = "存在阻断项，需先修复阻断问题再进入执行入口。"
+    elif warning_count > 0:
+        status = "needs_attention"
+        if has_active_plan:
+            recommended_entrypoint = "harness run-agents"
+            rationale = "当前无阻断项且 active 计划已存在，可继续进入 run-agents，但仍应关注提醒项。"
+        else:
+            recommended_entrypoint = "harness propose-plan"
+            rationale = "当前无阻断项但缺少 active 计划，需先补齐计划入口。"
+    else:
+        status = "ready"
+        recommended_entrypoint = "harness run-agents"
+        rationale = "治理检查通过，可进入 run-agents 执行入口。"
+
+    ready_for_run_agents = blocking_count == 0 and has_active_plan
+    ready_for_clean_pass = blocking_count == 0 and warning_count == 0
+    return {
+        "status": status,
+        "ready_for_run_agents": ready_for_run_agents,
+        "ready_for_clean_pass": ready_for_clean_pass,
+        "recommended_entrypoint": recommended_entrypoint,
+        "rationale": rationale,
+    }
+
+
+def _build_check_next_actions(
+    *,
+    blocking_issues: list[CommandMessage],
+    warning_issues: list[CommandMessage],
+    has_active_plan: bool,
+    governance_entry: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """将审计问题映射为结构化下一步动作。"""
+
+    actions: list[dict[str, Any]] = []
+
+    for issue in blocking_issues:
+        actions.append(
+            {
+                "priority": "P0",
+                "code": "resolve_blocking_issue",
+                "title": issue.message,
+                "reason": issue.detail.get("impact_scope") or issue.message,
+                "type": "resolve_blocking_issue",
+                "issue_code": issue.code,
+                "summary": issue.message,
+                "suggestion": issue.detail.get("suggestion"),
+                "source": issue.detail.get("source"),
+                "location": issue.location,
+                "recommended_command": "harness check",
+            }
+        )
+
+    if not has_active_plan:
+        actions.append(
+            {
+                "priority": "P1",
+                "code": "create_active_plan",
+                "title": "补齐 active 计划入口",
+                "reason": "当前缺少 active 计划文件，尚不满足进入 run-agents 的前置条件。",
+                "type": "create_active_plan",
+                "issue_code": "missing_plan_targets",
+                "summary": "缺少 active 计划文件，当前不满足进入 run-agents 的前置条件。",
+                "suggestion": "先执行 harness propose-plan 生成 active 计划，再回到 check 校验入口状态。",
+                "source": "docs/PLANS.md",
+                "location": "docs/exec-plans/active/",
+                "recommended_command": "harness propose-plan",
+            }
+        )
+
+    for issue in warning_issues:
+        if issue.code == "missing_plan_targets":
+            continue
+        actions.append(
+            {
+                "priority": "P1",
+                "code": "resolve_warning_issue",
+                "title": issue.message,
+                "reason": issue.detail.get("impact_scope") or issue.message,
+                "type": "resolve_warning_issue",
+                "issue_code": issue.code,
+                "summary": issue.message,
+                "suggestion": issue.detail.get("suggestion"),
+                "source": issue.detail.get("source"),
+                "location": issue.location,
+                "recommended_command": "harness check",
+            }
+        )
+
+    if not actions:
+        actions.append(
+            {
+                "priority": "P2",
+                "code": "proceed",
+                "title": "继续进入执行入口",
+                "reason": "当前未发现阻断项或提醒项，治理入口已就绪。",
+                "type": "proceed",
+                "issue_code": None,
+                "summary": "治理入口已就绪，可进入下一阶段执行。",
+                "suggestion": "执行 run-agents 前后各运行一次 check，保持入口状态持续可见。",
+                "source": "docs/product-specs/v2/commands/run-agents/product.md",
+                "location": "docs/exec-plans/active/",
+                "recommended_command": "harness run-agents",
+            }
+        )
+    elif governance_entry["status"] == "blocked":
+        actions.append(
+            {
+                "priority": "P1",
+                "code": "recheck_after_fix",
+                "title": "修复后复跑 check",
+                "reason": "阻断项修复后需要再次确认治理入口状态。",
+                "type": "recheck_after_fix",
+                "issue_code": None,
+                "summary": "完成阻断修复后必须复跑 check 确认入口状态。",
+                "suggestion": "阻断项清零后再进入 run-agents。",
+                "source": "docs/RELIABILITY.md",
+                "location": "docs/",
+                "recommended_command": "harness check",
+            }
+        )
+    return actions
+
+
 def _find_python_files(root: Path) -> list[Path]:
     """收集仓库内的 Python 文件，忽略虚拟环境与构建产物。"""
 
@@ -1785,6 +1932,23 @@ def run_check(root: Path, *, dry_run: bool) -> CommandResult:
     blocking_count = len(blocking_issues)
     warning_count = len(warning_issues)
     blocking_reasons = [issue.message for issue in blocking_issues]
+    has_active_plan = bool(plan_files)
+    health_score = _compute_check_health_score(
+        blocking_count=blocking_count,
+        warning_count=warning_count,
+        unquantified_count=unquantified_count,
+    )
+    governance_entry = _build_check_governance_entry(
+        blocking_count=blocking_count,
+        warning_count=warning_count,
+        has_active_plan=has_active_plan,
+    )
+    next_actions = _build_check_next_actions(
+        blocking_issues=blocking_issues,
+        warning_issues=warning_issues,
+        has_active_plan=has_active_plan,
+        governance_entry=governance_entry,
+    )
 
     if blocking_issues:
         status = ResultStatus.FAILURE
@@ -1823,6 +1987,9 @@ def run_check(root: Path, *, dry_run: bool) -> CommandResult:
             "issue_count": total_issues,
             "unquantified_count": unquantified_count,
             "blocking_reasons": blocking_reasons,
+            "health_score": health_score,
+            "governance_entry": governance_entry,
+            "next_actions": next_actions,
             "checked_targets": {
                 "plan_files": [_relative_location(path, root) for path in plan_files],
                 "generated_files": [_relative_location(path, root) for path in generated_files],

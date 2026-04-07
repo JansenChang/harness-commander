@@ -715,6 +715,9 @@ def test_check_reports_unquantified_rule_sources_in_summary(
         "质量说明\n\n暂时只有说明文本。\n",
         encoding="utf-8",
     )
+    active_plan = tmp_path / "docs/exec-plans/active/demo.md"
+    active_plan.parent.mkdir(parents=True, exist_ok=True)
+    active_plan.write_text("# demo plan\n", encoding="utf-8")
 
     exit_code = main(["-p", str(tmp_path), "--json", "check"])
     captured = capsys.readouterr()
@@ -731,6 +734,56 @@ def test_check_reports_unquantified_rule_sources_in_summary(
         for item in result["meta"]["checks"]["all"]
     )
     assert "未量化" in result["summary"]
+    assert isinstance(result["meta"]["health_score"], int)
+    assert 0 <= result["meta"]["health_score"] <= 100
+    governance_entry = result["meta"]["governance_entry"]
+    assert governance_entry["status"] == "needs_attention"
+    assert governance_entry["ready_for_run_agents"] is True
+    assert isinstance(governance_entry["recommended_entrypoint"], str)
+    assert governance_entry["recommended_entrypoint"]
+    next_actions = result["meta"]["next_actions"]
+    assert isinstance(next_actions, list)
+    assert next_actions
+    assert all(isinstance(action, dict) for action in next_actions)
+
+
+def test_check_governance_entry_blocked_for_secret_exposure_integration(
+    tmp_path: Path, capsys
+) -> None:
+    """integration 场景下出现阻断项时，应给出 blocked 入口状态和动作建议。"""
+
+    exit_code = main(["-p", str(tmp_path), "init"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+
+    source_file = tmp_path / "src/demo.py"
+    source_file.parent.mkdir(parents=True, exist_ok=True)
+    source_file.write_text('password = "supersecret"\n', encoding="utf-8")
+
+    exit_code = main(["-p", str(tmp_path), "--json", "check"])
+    captured = capsys.readouterr()
+    result = json.loads(captured.out.strip())
+
+    assert exit_code == 1
+    assert result["command"] == "check"
+    assert result["status"] == "failure"
+    assert result["meta"]["blocking_count"] >= 1
+    assert result["meta"]["checks"]["all"]
+    governance_entry = result["meta"]["governance_entry"]
+    assert governance_entry["status"] == "blocked"
+    assert governance_entry["ready_for_run_agents"] is False
+    assert governance_entry["ready_for_clean_pass"] is False
+    assert isinstance(governance_entry["recommended_entrypoint"], str)
+    assert governance_entry["recommended_entrypoint"]
+    next_actions = result["meta"]["next_actions"]
+    assert isinstance(next_actions, list)
+    assert next_actions
+    assert any(
+        isinstance(action, dict)
+        and isinstance(action.get("summary"), str)
+        and action["summary"]
+        for action in next_actions
+    )
 
 
 def test_error_handling_and_recovery(tmp_path: Path, capsys) -> None:

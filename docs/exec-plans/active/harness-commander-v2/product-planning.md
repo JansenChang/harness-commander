@@ -120,9 +120,10 @@
   - 最小闭环和配角命令定位
 - 已启动：
   - `run-agents` 命令级执行计划：`run-agents-stage-contracts.md`
+  - `check` 命令级执行计划：`check-governance-entry.md`
 - 当前选择：
-  - 先落阶段合同，不直接扩展更大 runtime
-  - 先锁 deterministic baseline，再规划 `check` / `distill` 接入
+  - 先落 `run-agents` 阶段合同和 `check` 治理入口
+  - 继续保持 deterministic baseline，再规划 `distill` 深化
 
 ## References
 
