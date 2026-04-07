@@ -35,6 +35,32 @@
 
 ## 当前记录
 
+### [open] check ready 语义曾缺少 integration 防回归测试
+
+- 日期：2026-04-07
+- 类型：`ai-mistake`
+- 范围：`check` V2 Phase 1、integration 覆盖
+- 现象：产品文档已要求验证 `governance_entry.status=ready`，但仓库里最初只锁住了 blocking / warning 场景，未在 integration 层稳定验证真实 ready 入口。
+- 根因：此前实现与测试优先关注“发现问题”，遗漏了治理入口的成功路径也必须在真实仓库上下文中被验证。
+- 当前处理：新增 `check` ready 集成执行计划，并补 integration 用例锁定 `status=success`、`ready_for_run_agents=true`、`ready_for_clean_pass=true` 与 `next_actions=proceed`。
+- 防复发：治理入口类命令默认要在 CLI 与 integration 两层同时覆盖 failure / warning / success 三态，不允许只测坏路径。
+- 关联测试：`tests/test_integration.py`
+- 关联文档：`docs/product-specs/v2/commands/check/testing.md`、`docs/QUALITY_SCORE.md`、`docs/RELIABILITY.md`
+- 关闭条件：`check` ready 集成用例落地并持续通过。
+
+### [closed] distill 的 `section_sources` 曾偏离协议键名
+
+- 日期：2026-04-07
+- 类型：`ai-mistake`
+- 范围：`distill` V2 Phase 1、来源映射结果协议、integration 覆盖
+- 现象：协议文档规定 `section_sources` 使用 `goals/rules/limits/prohibitions`，但真实 heuristic 路径返回了中文键名（`业务目标/关键规则/边界限制/禁止项`）。
+- 根因：实现直接复用了人类可读 section 标签构造机器字段，CLI 层未对键集合做强断言，导致协议漂移未被及时发现。
+- 当前处理：已把 `section_sources` 统一改回英文协议键；保留产物中的中文显示标签；补充 integration failure 场景测试并升级 CLI / integration 的 `assert_distill_mapping_meta` 为强断言。
+- 防复发：凡是协议文档已锁定结构化键名的字段，测试 helper 必须直接断言键集合，不接受“只断言 value 结构”。
+- 关联测试：`tests/test_cli.py`、`tests/test_integration.py`
+- 关联文档：`docs/product-specs/v2/commands/distill/protocol.md`、`docs/QUALITY_SCORE.md`、`docs/RELIABILITY.md`
+- 关闭条件：已修复并由 CLI / integration 回归测试覆盖。
+
 ### [open] install-provider 测试曾依赖真实用户目录
 
 - 日期：2026-04-07
@@ -112,3 +138,16 @@
 - 关联测试：`tests/test_cli.py`、`tests/test_integration.py`
 - 关联文档：`docs/product-specs/v2/commands/distill/protocol.md`、`docs/exec-plans/active/harness-commander-v2/distill-source-mapping.md`
 - 关闭条件：来源映射扩展到更稳定的 chunk / 引用回链机制，并为 host-model 路径定义可接受覆盖阈值。
+
+### [open] distill 曾在 failure 路径写出正式参考材料
+
+- 日期：2026-04-07
+- 类型：`ai-mistake`
+- 范围：`distill` failure 语义、`docs/references/*-llms.txt` 产物
+- 现象：`distillation_insufficient` 返回 `failure` 时，命令仍会写出正式 `*-llms.txt` 文件，并在 `artifacts` 中报告已创建产物。
+- 根因：实现先无条件执行写文件，再基于 `errors` 计算最终状态，导致结果对象与文件系统事实漂移。
+- 当前处理：改为先计算命令状态；当状态为 `failure` 时保留 `meta.extraction_report`、`section_sources`、`source_mapping_coverage`，但不生成正式 artifact，也不真实落盘。
+- 防复发：CLI 与 integration 都补充 `distillation_insufficient` 时 `artifacts=[]`、目标文件不存在的断言；协议文档同步明确 failure 不生成正式参考材料。
+- 关联测试：`tests/test_cli.py`、`tests/test_integration.py`
+- 关联文档：`docs/product-specs/v2/commands/distill/protocol.md`、`docs/product-specs/v2/commands/distill/testing.md`、`docs/RELIABILITY.md`
+- 关闭条件：后续 `distill` 失败路径持续保持“结果 / JSON / 落盘事实一致”，且不再出现 failure 仍写正式产物的回归。

@@ -579,9 +579,21 @@ def run_distill(
             )
         )
 
-    artifact = write_text(target_file, distilled_content, dry_run=dry_run, overwrite=True)
+    status = (
+        ResultStatus.FAILURE
+        if errors
+        else ResultStatus.WARNING if warnings else ResultStatus.SUCCESS
+    )
+    artifacts: list[CommandArtifact] = []
+    if status != ResultStatus.FAILURE:
+        artifacts.append(
+            write_text(target_file, distilled_content, dry_run=dry_run, overwrite=True)
+        )
 
-    summary = f"已将输入材料 {source_name} 压缩为参考材料 {target_name}。"
+    if status == ResultStatus.FAILURE:
+        summary = f"输入材料 {source_name} 提炼不足，未生成参考材料 {target_name}。"
+    else:
+        summary = f"已将输入材料 {source_name} 压缩为参考材料 {target_name}。"
     LOGGER.info(
         "distill 命令执行完成 root=%s source=%s target=%s dry_run=%s",
         root,
@@ -592,13 +604,9 @@ def run_distill(
 
     return CommandResult(
         command="distill",
-        status=(
-            ResultStatus.FAILURE
-            if errors
-            else ResultStatus.WARNING if warnings else ResultStatus.SUCCESS
-        ),
+        status=status,
         summary=summary,
-        artifacts=[artifact],
+        artifacts=artifacts,
         warnings=warnings,
         errors=errors,
         meta={
@@ -770,13 +778,21 @@ def _render_distill_from_sections(
 ) -> tuple[str, dict[str, Any]]:
     """把四类结构化信息渲染为标准 distill 输出。"""
 
-    sections = {
-        "业务目标": goals,
-        "关键规则": rules,
-        "边界限制": limits,
-        "禁止项": prohibitions,
+    section_display_labels = {
+        "goals": "业务目标",
+        "rules": "关键规则",
+        "limits": "边界限制",
+        "prohibitions": "禁止项",
     }
-    unresolved_sections = [name for name, items in sections.items() if not items]
+    sections = {
+        "goals": goals,
+        "rules": rules,
+        "limits": limits,
+        "prohibitions": prohibitions,
+    }
+    unresolved_sections = [
+        section_display_labels[name] for name, items in sections.items() if not items
+    ]
     extracted_section_count = sum(1 for items in sections.values() if items)
     section_sources, source_mapping_coverage = _build_distill_source_mapping(
         sections=sections,
@@ -820,7 +836,7 @@ def _render_distill_from_sections(
         ]
     )
     for section_name, entries in section_sources.items():
-        distilled_lines.extend(["", f"### {section_name}"])
+        distilled_lines.extend(["", f"### {section_display_labels[section_name]}"])
         if not entries:
             distilled_lines.append("- 无提炼条目")
             continue

@@ -505,6 +505,7 @@ def assert_distill_mapping_meta(
     assert isinstance(extraction_report, dict)
     assert isinstance(section_sources, dict)
     assert isinstance(source_mapping_coverage, dict)
+    assert set(section_sources.keys()) == {"goals", "rules", "limits", "prohibitions"}
     assert "unresolved_sections" in extraction_report
     assert "extracted_section_count" in extraction_report
     assert "extraction_source" in extraction_report
@@ -589,6 +590,9 @@ def test_distill_fails_when_extraction_is_insufficient(tmp_path: Path, capsys) -
     assert payload["warnings"][0]["code"] == "partial_distillation"
     assert payload["errors"][0]["code"] == "distillation_insufficient"
     assert payload["meta"]["extracted_section_count"] == 0
+    assert payload["artifacts"] == []
+    assert not Path(payload["meta"]["target_path"]).exists()
+    assert "未生成参考材料" in payload["summary"]
     extraction_report, _, source_mapping_coverage = assert_distill_mapping_meta(payload)
     assert extraction_report["extracted_section_count"] == 0
     assert source_mapping_coverage["total_items"] == 0

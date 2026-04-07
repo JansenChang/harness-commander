@@ -61,6 +61,11 @@
   - 不强制要求全部可定位
   - 不能可靠定位时必须显式 `unmatched`
 - `unmatched` 不单独触发 failure；除非提炼本身已不足（沿用 `distillation_insufficient`）。
+- `distillation_insufficient`：
+  - 命令结果为 `failure`
+  - `meta.extraction_report`、`meta.section_sources`、`meta.source_mapping_coverage` 仍需完整返回
+  - `artifacts` 必须为空
+  - 真实文件不得落盘到 `docs/references/*-llms.txt`
 
 ## 参考材料输出约束
 
@@ -75,6 +80,7 @@
 - 现有消费者依赖字段必须继续可用。
 - 新字段作为附加，不替代现有 fallback 语义。
 - `summary`、`warnings/errors`、`meta` 必须指向同一份事实。
+- failure 路径下，文件产物事实也必须与结果一致，不能出现“failure 但已创建正式参考材料”。
 
 ## deterministic baseline
 

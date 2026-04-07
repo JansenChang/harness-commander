@@ -10,13 +10,13 @@
 
 - 状态：active
 - 当前主计划：`product-planning.md`
-- 当前阶段：`run-agents` 接入 `check` 治理前置门
+- 当前阶段：补齐 `check` ready 集成覆盖
 
 ## 下一步
 
-- 先完成 `run-agents` 的治理前置门接入
-- 再评估 warning 是否升级为更强门禁
-- 当前优先命令：`run-agents`
+- 先锁定 `check` 的 real ready 场景
+- 再继续评估 `check` / `distill` 是否还有跨层覆盖空洞
+- 当前优先命令：`check`
 
 ## 计划入口
 
@@ -25,3 +25,5 @@
 - `check-governance-entry.md`
 - `distill-source-mapping.md`
 - `run-agents-check-preflight.md`
+- `distill-integration-failure-coverage.md`
+- `check-ready-integration-coverage.md`

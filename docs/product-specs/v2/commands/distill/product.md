@@ -19,6 +19,9 @@
   - `section_sources`
   - `source_mapping_coverage`
 - 在 `*-llms.txt` 中追加最小来源映射区块，不重排主体内容。
+- `distillation_insufficient` 时：
+  - 保留失败结果与来源映射元数据
+  - 不生成正式 `*-llms.txt` 产物
 
 ## deterministic baseline（本轮约束）
 
@@ -26,6 +29,7 @@
 - 来源映射优先“可解释、可复核”，不追求一次性完整覆盖。
 - 条目无法可靠定位时必须标记 `unmatched`，不能伪造来源位置。
 - `health` 或评分类字段不是本轮目标，不替代原有 warning / failure 语义。
+- 失败状态不能继续落盘正式参考材料，否则会与结果语义漂移。
 
 ## 本轮要解决的问题
 

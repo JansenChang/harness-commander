@@ -19,6 +19,7 @@
 - Integration 测试：
   - 校验真实文件提炼后的映射覆盖统计
   - 校验 host-model 失败回退路径下报告一致性
+  - 校验真实 failure / edge path 下稳定错误协议不漂移
   - 校验输出参考材料中的来源映射区块
 
 ## Phase 1 必测场景
@@ -44,6 +45,16 @@
 - `distillation_insufficient` 时：
   - 仍返回来源映射结构（可为空或 unmatched）
   - 不改变既有 failure 判定语义
+  - integration 层也必须锁住该 failure 结果，不只在 CLI 层断言
+  - 不生成正式 `*-llms.txt` artifact，也不真实落盘
+
+### provider / mode 边界场景
+
+- `host-model` 缺少 provider 时：
+  - 返回 `provider_not_configured`
+  - integration 层必须验证真实入口链路下错误码和 message 稳定
+- 若后续补 `invalid_distill_mode`：
+  - CLI 与 integration 都要共享同一份 failure 事实，不允许只测一层
 
 ## 兼容性断言
 

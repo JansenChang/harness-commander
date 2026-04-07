@@ -122,6 +122,7 @@ def assert_distill_mapping_meta(
     assert isinstance(extraction_report, dict)
     assert isinstance(section_sources, dict)
     assert isinstance(source_mapping_coverage, dict)
+    assert set(section_sources.keys()) == {"goals", "rules", "limits", "prohibitions"}
     assert "unresolved_sections" in extraction_report
     assert "extracted_section_count" in extraction_report
     assert "extraction_source" in extraction_report
@@ -308,6 +309,7 @@ def assert_distill_mapping_meta(
     assert isinstance(extraction_report, dict)
     assert isinstance(section_sources, dict)
     assert isinstance(source_mapping_coverage, dict)
+    assert set(section_sources.keys()) == {"goals", "rules", "limits", "prohibitions"}
     assert "unresolved_sections" in extraction_report
     assert "extracted_section_count" in extraction_report
     assert "extraction_source" in extraction_report
@@ -676,6 +678,74 @@ def test_host_model_distill_json_contract(tmp_path: Path, capsys) -> None:
         or extraction_report["unresolved_sections"]
     )
 
+
+def test_distill_insufficient_extraction_returns_stable_failure_integration(
+    tmp_path: Path, capsys
+) -> None:
+    """integration 层应锁住 distillation_insufficient 的真实 failure 协议。"""
+
+    exit_code = main(["-p", str(tmp_path), "init"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+
+    test_doc = tmp_path / "brief.md"
+    test_doc.write_text("# 简短文档\n\n只有一句描述。\n", encoding="utf-8")
+
+    exit_code = main(["-p", str(tmp_path), "--json", "distill", str(test_doc)])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out.strip())
+
+    assert exit_code == 1
+    assert payload["command"] == "distill"
+    assert payload["status"] == "failure"
+    assert payload["warnings"][0]["code"] == "partial_distillation"
+    assert payload["errors"][0]["code"] == "distillation_insufficient"
+    assert payload["meta"]["distill_mode"] == "heuristic"
+    assert payload["meta"]["extraction_source"] == "heuristic"
+    assert payload["artifacts"] == []
+    assert not Path(payload["meta"]["target_path"]).exists()
+    assert "未生成参考材料" in payload["summary"]
+    extraction_report, section_sources, source_mapping_coverage = assert_distill_mapping_meta(
+        payload
+    )
+    assert extraction_report["extracted_section_count"] == 0
+    assert source_mapping_coverage["total_items"] == 0
+    assert isinstance(section_sources, dict)
+    assert set(section_sources.keys()) == {"goals", "rules", "limits", "prohibitions"}
+
+
+def test_distill_host_model_requires_provider_integration(
+    tmp_path: Path, capsys
+) -> None:
+    """integration 层应锁住 host-model 缺少 provider 时的稳定 failure。"""
+
+    exit_code = main(["-p", str(tmp_path), "init"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+
+    test_doc = tmp_path / "requirements.md"
+    test_doc.write_text("# 任意文档\n\n原始内容。\n", encoding="utf-8")
+
+    exit_code = main(
+        [
+            "-p",
+            str(tmp_path),
+            "--json",
+            "distill",
+            str(test_doc),
+            "--mode",
+            "host-model",
+        ]
+    )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out.strip())
+
+    assert exit_code == 1
+    assert payload["command"] == "distill"
+    assert payload["status"] == "failure"
+    assert payload["artifacts"] == []
+    assert payload["errors"][0]["code"] == "provider_not_configured"
+    assert payload["meta"] == {}
 
 
 def test_run_agents_preflight_failure_blocks_following_stages_integration(
