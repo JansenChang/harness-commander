@@ -10,13 +10,14 @@
 
 - 状态：active
 - 当前主计划：`product-planning.md`
-- 当前阶段：补齐 `check` ready 集成覆盖
+- 当前阶段：已完成 `run-agents` preflight、`distill` integration failure、`check` ready integration 三片补洞；等待确认下一轮
 
 ## 下一步
 
-- 先锁定 `check` 的 real ready 场景
-- 再继续评估 `check` / `distill` 是否还有跨层覆盖空洞
-- 当前优先命令：`check`
+- 待确认：
+  - 是否继续收敛 `check` 的 `next_actions` / 三态文案
+  - 是否继续强化 `distill` 的 artifact / summary / meta 一致性断言
+- 当前优先命令：待确认
 
 ## 计划入口
 

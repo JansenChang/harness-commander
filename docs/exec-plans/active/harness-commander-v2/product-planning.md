@@ -118,6 +118,12 @@
   - V2 总问题陈述
   - 宿主模型边界
   - 最小闭环和配角命令定位
+  - `run-agents` 阶段合同基线
+  - `check` 治理入口结果协议
+  - `distill` 来源映射结果协议
+  - `run-agents` 接入 `check` 治理前置门
+  - `distill` integration failure / edge path 补洞
+  - `check` ready integration 补洞
 - 已启动：
   - `run-agents` 命令级执行计划：`run-agents-stage-contracts.md`
   - `check` 命令级执行计划：`check-governance-entry.md`
@@ -126,8 +132,8 @@
   - `distill` 集成失败路径补强计划：`distill-integration-failure-coverage.md`
   - `check` ready 集成覆盖计划：`check-ready-integration-coverage.md`
 - 当前选择：
-  - 先落 `run-agents` 阶段合同、`check` 治理入口、`distill` 来源映射，再补 `distill` 的真实集成失败路径
-  - 当前继续补 `check` 的 real ready 集成场景，锁定“可继续进入 run-agents”的成功入口
+  - 已完成 `run-agents` / `check` / `distill` 当前这批最小补洞切片
+  - 当前先停在文档收口状态，等待确认下一轮优先级
   - 继续保持 deterministic baseline，再规划宿主模型默认主路径
 
 ## References

@@ -93,6 +93,20 @@
 - active exec plans 当前阶段导航准确。
 - AI 漏测事件已留痕。
 
+## 当前进度
+
+- 已完成：
+  - `tests/test_integration.py` 新增 real ready 场景
+  - active index 已切到当前阶段并同步进度
+  - 技术债台账已记录本次漏测补洞
+- 已验证：
+  - `pytest -q tests/test_integration.py -k check`
+  - `pytest -q tests/test_cli.py -k check`
+  - `pytest -q`
+- 当前状态：
+  - 本计划目标已达成
+  - 暂不归档，等待确认下一轮是否继续推进 `check` 或切到其他命令
+
 ## Exception Handling
 
 - 若 ready 场景难以构造，优先在测试里显式写出可量化规则和默认目标，而不是降低断言标准。
