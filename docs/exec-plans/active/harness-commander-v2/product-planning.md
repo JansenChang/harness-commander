@@ -126,17 +126,14 @@
   - `check` ready integration 补洞
   - `distill` summary / artifact / meta 一致性补洞
   - `run-agents` 显式 `--plan` preflight override 覆盖
+- 已归档：
+  - V2 Phase 1 最小闭环归档：`docs/exec-plans/completed/2026-04-08-harness-commander-v2-phase1-archive.md`
 - 已启动：
-  - `run-agents` 命令级执行计划：`run-agents-stage-contracts.md`
-  - `check` 命令级执行计划：`check-governance-entry.md`
-  - `distill` 命令级执行计划：`distill-source-mapping.md`
-  - `run-agents` 治理前置门计划：`run-agents-check-preflight.md`
-  - `distill` 集成失败路径补强计划：`distill-integration-failure-coverage.md`
-  - `check` ready 集成覆盖计划：`check-ready-integration-coverage.md`
+  - V2 Phase 2 宿主模型主路径产品规划：`phase2-host-model-path-planning.md`
 - 当前选择：
-  - 已完成 `run-agents` / `check` / `distill` 当前这批最小补洞切片
-  - 当前可将 V2 Phase 1 视为完成，并进入归档 / 下一轮立项状态
-  - 继续保持 deterministic baseline；后续若进入 V2 Phase 2，再规划宿主模型默认主路径
+  - 当前不继续补 Phase 1，而是进入 Phase 2 产品规划
+  - 优先收敛 `run-agents` 与 `distill` 的“默认优先宿主模型，失败 fallback”边界
+  - `check` 暂不进入宿主模型主路径，只保留后续评估入口
 
 ## References
 

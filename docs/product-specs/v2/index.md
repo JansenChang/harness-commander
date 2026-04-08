@@ -8,9 +8,10 @@
 
 ## 当前状态
 
-- 状态：phase1-complete
+- 状态：phase1-complete / phase2-planning
 - 基线来源：V1 已实现命令集
 - 当前完成：`run-agents + check + distill` 最小闭环与 deterministic baseline
+- 当前规划中：`run-agents + distill` 默认优先宿主模型主路径
 - 后续目标：推进宿主模型默认优先主路径与更强的治理联动
 
 ## 已确认的 V2 产品决策
@@ -138,7 +139,7 @@
 - 把宿主模型能力限制在 Harness 可控的边界内
 - `run-agents` 仅开放 `requirements` 与 `plan` 给宿主模型主路径
 
-当前状态：未开始
+当前状态：产品规划中
 
 ### Phase 3
 

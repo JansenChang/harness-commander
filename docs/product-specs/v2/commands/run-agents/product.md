@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-- active（V2 第一轮实现中）
+- phase1-complete / phase2-planning
 
 ## V2 定位
 
@@ -36,6 +36,16 @@
   - `requirements`、`plan` 后续可切到“默认优先宿主模型，失败 fallback”。
   - `verify`、最终状态、阻断逻辑、产物路径与命名永远由 Harness 控制。
 
+## Phase 2 当前规划方向
+
+- 进入“默认优先宿主模型，失败 fallback”模式时，只开放 `requirements` 与 `plan`。
+- Harness 继续负责：
+  - `check` preflight 消费
+  - verify 判定
+  - 最终状态
+  - 结构化阶段合同
+- 当前 Phase 2 仍处于产品规划中，未进入实现。
+
 ## 永不交给宿主模型的能力
 
 - `verify` 通过判断
@@ -46,9 +56,11 @@
 
 ## 与 active exec plan 对齐
 
-- 当前执行计划：
-  - `docs/exec-plans/active/harness-commander-v2/run-agents-stage-contracts.md`
-  - `docs/exec-plans/active/harness-commander-v2/run-agents-check-preflight.md`
+- Phase 1 已归档：
+  - `docs/exec-plans/completed/2026-04-08-harness-commander-v2-phase1-archive/run-agents-stage-contracts.md`
+  - `docs/exec-plans/completed/2026-04-08-harness-commander-v2-phase1-archive/run-agents-check-preflight.md`
+- 当前 Phase 2 主计划：
+  - `docs/exec-plans/active/harness-commander-v2/phase2-host-model-path-planning.md`
 - 对齐 ULW：
   - ULW 1：阶段合同字段收敛
   - ULW 2：合同进入结果协议且保持兼容

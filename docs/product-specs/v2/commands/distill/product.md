@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-- active（V2 第一轮实现中）
+- phase1-complete / phase2-planning
 
 ## V2 定位
 
@@ -37,9 +37,23 @@
 - 让 unresolved section 与 fallback 事实具备统一报告结构。
 - 让下游 agent 能消费提炼结果和来源映射，而不只读纯文本摘要。
 
+## Phase 2 当前规划方向
+
+- 后续会评估把默认入口从 `heuristic` 推进到“默认优先宿主模型，失败 fallback”。
+- 即使进入 host-first 主路径，Harness 仍然控制：
+  - 最终状态
+  - 目标路径
+  - fallback 事实
+  - 来源映射结构
+- 当前 Phase 2 仍处于产品规划中，未进入实现。
+
 ## 与 active exec plan 对齐
 
-- 当前执行计划：`docs/exec-plans/active/harness-commander-v2/distill-source-mapping.md`
+- Phase 1 已归档：
+  - `docs/exec-plans/completed/2026-04-08-harness-commander-v2-phase1-archive/distill-source-mapping.md`
+  - `docs/exec-plans/completed/2026-04-08-harness-commander-v2-phase1-archive/distill-integration-failure-coverage.md`
+- 当前 Phase 2 主计划：
+  - `docs/exec-plans/active/harness-commander-v2/phase2-host-model-path-planning.md`
 - 对齐 ULW：
   - ULW 1：锁定 extraction report 协议
   - ULW 2：四类 section 来源映射

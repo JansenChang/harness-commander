@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-- active（V2 第一轮实现中）
+- phase1-complete
 
 ## V2 定位
 
@@ -48,12 +48,21 @@
 
 ## 与 active exec plan 对齐
 
-- 当前执行计划：`docs/exec-plans/active/harness-commander-v2/check-governance-entry.md`
+- Phase 1 已归档：
+  - `docs/exec-plans/completed/2026-04-08-harness-commander-v2-phase1-archive/check-governance-entry.md`
+  - `docs/exec-plans/completed/2026-04-08-harness-commander-v2-phase1-archive/check-ready-integration-coverage.md`
 - 对齐 ULW：
   - ULW 1：锁定治理入口结果协议
   - ULW 2：把问题清单转成下一步动作输入
   - ULW 3：保持兼容并补齐覆盖
   - ULW 4：为后续接入 `run-agents` / `distill` 留扩展位
+
+## 下一阶段位置
+
+- `check` 当前不进入 Phase 2 的宿主模型主路径。
+- 下一轮若继续推进，优先评估：
+  - 是否升级为更强的 `run-agents` 前置门
+  - `next_actions` 是否升级为可直接消费的任务包
 
 ## 当前非目标
 
