@@ -12,6 +12,7 @@
 
 ## 执行规范
 
+- 开始任何任务前，先读 `RULES.md`
 - 开始任何实现、重构、排查、测试方案设计或文档补充前，先阅读与当前任务相关的规范文件
 - 如果 `docs/` 中已有规范、计划、设计或业务约束，默认严格按这些文件执行
 - 如果发现当前任务缺少规范，先提醒并补充到对应 `docs/`，再继续落地
@@ -40,7 +41,7 @@
 
 在开始实现前，按任务类型自行命中并阅读：
 
-- 通用任务：`ARCHITECTURE.md`、`docs/PRODUCT_SENSE.md`、`docs/QUALITY_SCORE.md`
+- 通用任务：`RULES.md`、`ARCHITECTURE.md`、`docs/PRODUCT_SENSE.md`、`docs/QUALITY_SCORE.md`
 - 前端任务：额外阅读 `docs/DESIGN.md`、`docs/FRONTEND.md`、`docs/design-docs/index.md`
 - 后端/命令任务：额外阅读 `docs/product-specs/index.md` 和对应命令文档
 - 安全相关任务：额外阅读 `docs/SECURITY.md`
@@ -50,6 +51,7 @@
 
 ## 目录索引
 
+- `RULES.md`：项目级通用规则入口，定义统一阅读顺序、跨工具硬约束和规则优先级
 - `ARCHITECTURE.md`：系统分层、模块边界、数据流与依赖方向
 - `docs/DESIGN.md`：视觉规范、颜色、间距和组件样式要求
 - `docs/FRONTEND.md`：前端实现约束，例如 Hooks、状态管理和组件拆分规则

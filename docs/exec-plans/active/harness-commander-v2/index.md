@@ -13,6 +13,7 @@
 - 当前命令级 active plans：
   - `run-agents-host-model-phase2-contracts.md`
   - `distill-host-first-phase2-contracts.md`
+  - `application-commands-refactor.md`
 - 当前阶段：V2 Phase 1 已归档，当前进入 Phase 2 宿主模型主路径产品规划
 
 ## 产品开发进度
@@ -21,6 +22,7 @@
   - V2 Phase 1 最小闭环归档
   - Phase 2 顶层主计划
   - Phase 2 命令级计划拆解
+  - `application-commands-refactor.md` 的结构治理与测试验证
 - 正在推进：
   - `run-agents-host-model-phase2-contracts.md`
   - `distill-host-first-phase2-contracts.md`
@@ -30,7 +32,8 @@
 
 ## 下一步
 
-- 先锁定 `run-agents` 的宿主模型主路径边界与状态矩阵
+- 当前先等待应用层重构确认与归档，再继续 Phase 2 实现
+- 之后先锁定 `run-agents` 的宿主模型主路径边界与状态矩阵
 - 再锁定 `distill` 的默认 host-first / fallback / 来源映射边界
 - 命令级合同收敛后，再决定实现切片与测试矩阵
 - 当前优先命令：`run-agents`、`distill`
@@ -42,6 +45,7 @@
 - 当前 Phase 2 主计划：`phase2-host-model-path-planning.md`
 - `run-agents` 命令级计划：`run-agents-host-model-phase2-contracts.md`
 - `distill` 命令级计划：`distill-host-first-phase2-contracts.md`
+- 应用层重构计划：`application-commands-refactor.md`
 
 ## 历史说明
 

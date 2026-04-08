@@ -35,6 +35,19 @@
 
 ## 当前记录
 
+### [open] 应用层命令已拆层，但 `run_agents` / `distill` handler 仍偏大
+
+- 日期：2026-04-08
+- 类型：`tech-debt`
+- 范围：`src/harness_commander/application/command_handlers/run_agents.py`、`src/harness_commander/application/command_handlers/distill.py`
+- 现象：`commands.py` 已从 2400+ 行拆为 façade，但为保持产品逻辑和测试 patch 点稳定，`run_agents` 与 `distill` 当前仍保留了较多协议构造与摘要辅助函数，模块体量仍偏大。
+- 根因：本轮重构优先目标是消除单体入口和跨命令堆叠，而不是在同一轮同时重写 `run-agents` / `distill` 的内部协议构造结构。
+- 当前处理：已把公共导出面收敛到 façade，并把命令实现迁入 `application/command_handlers/`；对更细粒度的二次拆分暂不继续推进，避免和 Phase 2 产品合同收敛互相干扰。
+- 防复发：后续若继续改 `run-agents` / `distill`，优先把协议构造、摘要渲染、fallback / artifact 决策继续拆到各自私有 helper 模块，而不是再回堆到 façade 或继续扩单文件。
+- 关联测试：`tests/test_cli.py`、`tests/test_integration.py`
+- 关联文档：`docs/design-docs/application-command-development.md`、`docs/exec-plans/active/harness-commander-v2/application-commands-refactor.md`
+- 关闭条件：`run_agents` / `distill` 进一步拆分为更小的私有模块，且不引入协议或测试 patch 漂移。
+
 ### [open] check ready 语义曾缺少 integration 防回归测试
 
 - 日期：2026-04-07

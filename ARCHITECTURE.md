@@ -75,14 +75,16 @@ Harness-Commander 当前应固定为“分层命令编排架构（Layered Comman
 
 当前模块：
 
-- [src/harness_commander/application/commands.py:86](src/harness_commander/application/commands.py#L86) `run_init`
-- [src/harness_commander/application/commands.py:149](src/harness_commander/application/commands.py#L149) `run_propose_plan`
-- [src/harness_commander/application/commands.py:177](src/harness_commander/application/commands.py#L177) `run_plan_check`
-- [src/harness_commander/application/commands.py:206](src/harness_commander/application/commands.py#L206) `run_collect_evidence`
-- [src/harness_commander/application/commands.py:310](src/harness_commander/application/commands.py#L310) `run_sync`
-- [src/harness_commander/application/commands.py:394](src/harness_commander/application/commands.py#L394) `run_distill`
-- [src/harness_commander/application/commands.py:772](src/harness_commander/application/commands.py#L772) `run_check`
-- [src/harness_commander/application/commands.py:277](src/harness_commander/application/commands.py#L277) `execute_command`
+- [src/harness_commander/application/commands.py](src/harness_commander/application/commands.py)：
+  - 公共导出
+  - 兼容 patch 入口
+  - `execute_command`
+- [src/harness_commander/application/command_handlers/bootstrap.py](src/harness_commander/application/command_handlers/bootstrap.py)
+- [src/harness_commander/application/command_handlers/sync.py](src/harness_commander/application/command_handlers/sync.py)
+- [src/harness_commander/application/command_handlers/distill.py](src/harness_commander/application/command_handlers/distill.py)
+- [src/harness_commander/application/command_handlers/check.py](src/harness_commander/application/command_handlers/check.py)
+- [src/harness_commander/application/command_handlers/run_agents.py](src/harness_commander/application/command_handlers/run_agents.py)
+- [src/harness_commander/application/command_handlers/provider_install.py](src/harness_commander/application/command_handlers/provider_install.py)
 
 约束：
 
@@ -148,7 +150,7 @@ Harness-Commander 当前应固定为“分层命令编排架构（Layered Comman
 
 - 参数解析：[src/harness_commander/cli.py:43](src/harness_commander/cli.py#L43)
 - 命令分发：[src/harness_commander/cli.py:152](src/harness_commander/cli.py#L152)
-- 异常收敛：[src/harness_commander/application/commands.py:277](src/harness_commander/application/commands.py#L277)
+- 异常收敛：[src/harness_commander/application/commands.py](src/harness_commander/application/commands.py)
 - 统一结果：[src/harness_commander/domain/models.py:70](src/harness_commander/domain/models.py#L70)
 
 ## 统一协议
@@ -233,11 +235,18 @@ Harness-Commander 当前应固定为“分层命令编排架构（Layered Comman
 当前项目应继续保持以下结构方向：
 
 - `src/harness_commander/cli.py`：CLI 入口
-- `src/harness_commander/application/`：命令编排
+- `src/harness_commander/application/commands.py`：应用层公共导出与兼容 façade
+- `src/harness_commander/application/command_handlers/`：按命令族拆分的应用层编排实现
 - `src/harness_commander/domain/`：领域协议与异常
 - `src/harness_commander/infrastructure/`：文件、文档、模板等外部能力
 - `src/harness_commander/init_templates/`：`init` 命令使用的包内模板资源
 - `tests/`：CLI 与集成验证
+
+补充约束：
+
+- 新增命令逻辑默认写入 `application/command_handlers/`，不直接堆到 `application/commands.py`
+- `application/commands.py` 只保留公共导出、兼容包装与统一异常收敛
+- 具体开发规范见 `docs/design-docs/application-command-development.md`
 - `docs/product-specs/`：产品文档与协议文档
 - `docs/exec-plans/active/`：活动计划、任务清单和映射材料
 
@@ -245,7 +254,7 @@ Harness-Commander 当前应固定为“分层命令编排架构（Layered Comman
 
 当前代码已经具备“可继续扩展”的基础分层，不建议现在改成更重的 DDD、插件总线或事件驱动架构。
 
-V1 阶段应继续坚持：
+当前阶段应继续坚持：
 
 - 保持 `cli -> application -> domain/infrastructure` 的依赖方向
 - 新命令优先通过在应用层增加清晰入口函数实现
@@ -256,5 +265,5 @@ V1 阶段应继续坚持：
 ## 后续扩展建议
 
 - `distill` 已按该原则落地到独立的 [src/harness_commander/application/model_tasks.py](src/harness_commander/application/model_tasks.py)；后续若扩展 `propose-plan`，应复用同样的 application 边界，而不是直接塞进 CLI。
-- 如果 `sync` 和 `check` 规则继续增多，可把规则定义从 `application/commands.py` 拆到独立规则模块。
-- 如果命令参数继续复杂化，可为每个命令增加独立输入 DTO，避免 `commands.py` 继续膨胀。
+- 如果 `sync` 和 `check` 规则继续增多，可在各自命令模块内继续拆规则子模块，而不是回退到 façade。
+- 如果命令参数继续复杂化，可为每个命令增加独立输入 DTO，避免 façade 和命令模块继续膨胀。

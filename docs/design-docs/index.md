@@ -40,5 +40,6 @@
 
 - [Harness Engineering](harness-engineering.md)：定义本仓库的工程协作方法、文档分工、多 agent 原则和版本策略。
 - [核心信念](core-beliefs.md)：团队坚持或禁止的技术原则
+- [应用层命令开发规范](application-command-development.md)：约束 `application/commands.py` 及命令子模块的拆分方式、兼容策略和复杂度边界。
 - [Init 模板规范](init-templates.md)：说明 `harness init` 所使用的包内模板资源结构与内容基线，约束初始化文档格式标准。
 - [Distill 宿主模型契约](distill-host-model-contract.md)：定义 `distill` 在 `host-model` / `auto` 模式下的模型参与边界、结构化输出合同与 fallback 语义。
