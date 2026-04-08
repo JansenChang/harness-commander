@@ -1,100 +1,104 @@
-# Harness-Commander V2 `distill` Phase 2 宿主模型主路径合同规划
+# Harness-Commander V2 `distill` Phase 2 宿主模型默认路径规划
 
 ## Goal
 
-为 `distill` 的 Phase 2 锁定默认入口、provider prerequisite、fallback 语义与来源映射边界，使其能够从 Phase 1 的 deterministic baseline 稳定过渡到“默认优先宿主模型，失败 fallback”。
+把 `distill` 从 Phase 1 的 deterministic baseline 推进到可实施的 Phase 2 产品规划，明确默认入口、provider prerequisite、fallback 语义与来源映射兼容边界，为后续 host-first 实现提供稳定事实源。
 
 ## Context
 
 - V2 Phase 1 已完成并归档：
-  - `distill` 来源映射结果协议
-  - integration failure coverage
-  - `*-llms.txt` 追加来源映射区块
-- 当前 Phase 2 主计划已确认：
+  - `distill` 已具备 `heuristic` / `host-model` / `auto` 三种模式
+  - `extraction_report`、`section_sources`、`source_mapping_coverage` 已形成基础结果协议
+  - failure / fallback / artifact / summary / meta 一致性已补齐
+- V2 已确认：
   - `distill` 是第一批必须进入宿主模型主路径的命令之一
-  - 最终状态、目标路径、fallback 事实与结构化来源映射继续由 Harness 控制
-- 当前命令文档已列出核心问题，但还没有命令级 active plan 来收敛 host-first 合同。
+  - 即使进入 host-first 主路径，Harness 仍控制最终状态、产物路径、fallback 事实和结构化结果合同
+- 当前尚未锁定的问题仍停留在产品/协议层：
+  - 默认入口是否从 `heuristic` 切到 `auto`、host-first，还是新增显式模式
+  - provider 缺失时是直接失败还是回退到 heuristic
+  - 宿主模型提炼部分成功但来源映射不足时的通过语义
+
+## Business Logic
+
+- `distill` 的 Phase 2 不是单纯把默认模式改成 host-model，而是重新定义“默认提炼路径”的产品语义。
+- 如果默认入口、fallback 规则和来源映射通过条件没有先锁定，后续实现会出现：
+  - provider 缺失时行为不可预测
+  - 宿主模型部分成功被误报为完整成功
+  - 结构化来源映射与最终状态漂移
+- 本计划先收敛产品与协议，不修改命令实现。
 
 ## Scope
 
-- 锁定 Phase 2 默认入口是 `auto`、host-first，还是新的显式模式
-- 锁定 provider 缺失、模型失败、输出不足时的 fallback 语义
-- 锁定来源映射覆盖不足时的 success / warning / failure 边界
-- 同步 `product.md` / `protocol.md` / `testing.md` / `acceptance.md` 的 Phase 2 输入
+- 明确 `distill` Phase 2 的默认入口模式与 prerequisite
+- 明确宿主模型失败、部分成功、fallback 成功时的结果合同
+- 明确来源映射覆盖不足时的 success / warning / failure 边界
+- 同步 `distill` 相关产品、协议和 V2 顶层导航
 
 ## Non-Goals
 
-- 不实现增量 distill
-- 不实现跨文件聚合提炼
-- 不升级到 chunk 级来源映射
-- 不改变四类基础 section 模型
-- 不直接进入代码实现
+- 不实现 host-first runtime
+- 不修改现有 `distill` CLI 参数与代码行为
+- 不扩展新的 section 类型或跨文件聚合提炼
+- 不实现增量 distill 或 chunk 级引用系统
+- 不把最终状态、目标路径或 fallback 记录交给宿主模型
 
-## ULW 1: 锁定默认入口与模式兼容语义
+## ULW 1: 锁定默认入口与 prerequisite 语义
 
 ### 目标
 
-- 明确 `distill` 在 Phase 2 里如何从 Phase 1 的多模式入口过渡到默认优先宿主模型入口。
+- 明确 `distill` 在 Phase 2 中默认如何进入宿主模型主路径，以及 prerequisite 缺失时如何处理。
 
 ### 涉及范围
 
 - `docs/product-specs/v2/commands/distill/product.md`
 - `docs/product-specs/v2/commands/distill/protocol.md`
-- `docs/product-specs/v2/commands/distill/acceptance.md`
 
 ### 验收标准
 
-- 明确默认入口是继续复用 `auto`、切成 host-first 语义，还是新增显式模式
-- 明确 CLI 默认行为与现有 `heuristic` / `host-model` / `auto` 的兼容边界
-- 明确 provider prerequisite 是否成为进入默认主路径的硬条件
+- 明确默认入口是 `auto`、host-first 还是新的显式模式。
+- 明确 provider 缺失、provider 不可用、provider 被禁用时的对外语义。
+- 明确与现有 `heuristic` / `host-model` / `auto` 模式的兼容边界，避免 Phase 2 规划与现有 CLI 描述冲突。
 
-## ULW 2: 锁定宿主模型失败与 fallback 矩阵
-
-### 目标
-
-- 明确 `distill` 在 provider 缺失、超时、空结果、结构化解析失败时，是直接失败还是回退到 heuristic。
-
-### 涉及范围
-
-- `docs/product-specs/v2/commands/distill/protocol.md`
-- `docs/product-specs/v2/commands/distill/testing.md`
-- `docs/product-specs/v2/commands/distill/acceptance.md`
-
-### 验收标准
-
-- 定义至少以下场景的最终状态与 fallback 事实：
-  - provider 缺失
-  - provider 调用超时
-  - 宿主模型返回空提炼结果
-  - 宿主模型返回结构不完整
-  - 宿主模型失败后 heuristic fallback 成功
-  - 宿主模型失败后 heuristic fallback 仍不足
-- 明确 `summary` / `meta` / `artifacts` 在上述场景下必须保持同一份事实
-- 明确 failure 路径不得落盘正式 `*-llms.txt`
-
-## ULW 3: 锁定来源映射覆盖率与通过边界
+## ULW 2: 锁定 host-first fallback 与状态合同
 
 ### 目标
 
-- 明确宿主模型主路径下，来源映射不足是继续沿用 `unmatched`，还是引入新的 warning / failure 阈值。
+- 让调用方能稳定理解宿主模型参与后的 `success` / `warning` / `failure` 语义。
 
 ### 涉及范围
 
 - `docs/product-specs/v2/commands/distill/product.md`
 - `docs/product-specs/v2/commands/distill/protocol.md`
-- `docs/product-specs/v2/commands/distill/testing.md`
+- `docs/RELIABILITY.md`
 
 ### 验收标准
 
-- 明确 partial host-model output 在什么条件下仍可视为 `success`
-- 明确来源映射覆盖不足时是 `success`、`warning` 还是 `failure`
-- 明确 `section_sources` / `source_mapping_coverage` 的结构化合同在 fallback 后仍保持兼容
+- 明确宿主模型超时、空结果、结构不完整、调用失败时，是否回退到 heuristic，以及回退后最终状态如何表达。
+- 明确 partial host-model 输出但 fallback 未发生时，什么条件下允许继续成功，什么条件下必须 warning / failure。
+- 明确 `fallback_from`、`fallback_reason`、`extraction_report`、`artifacts` 在 host-first 路径下的稳定留痕要求。
 
-## ULW 4: 同步命令级文档与导航入口
+## ULW 3: 锁定来源映射覆盖与通过边界
 
 ### 目标
 
-- 让仓库能清楚反映 `distill` 已进入命令级 Phase 2 合同规划，而不是只停留在总计划问题列表。
+- 明确来源映射不足时对结果可信度与最终状态的影响，而不是让下游自己猜测。
+
+### 涉及范围
+
+- `docs/product-specs/v2/commands/distill/product.md`
+- `docs/product-specs/v2/commands/distill/protocol.md`
+
+### 验收标准
+
+- 明确 unmatched 条目是否继续沿用现有语义，还是需要新增 coverage threshold。
+- 明确 `source_mapping_coverage` 在 host-first 路径下是否影响命令级状态。
+- 明确 Harness 继续控制 `section_sources`、`source_mapping_coverage` 与目标文件落盘事实。
+
+## ULW 4: 同步导航并形成实现前移交物
+
+### 目标
+
+- 让仓库在进入实现前已经具备稳定的 `distill` Phase 2 规划入口。
 
 ### 涉及范围
 
@@ -104,26 +108,35 @@
 
 ### 验收标准
 
-- active index 能直接定位到本命令级 active plan
-- 主计划明确本文件是 `distill` 的命令级拆解入口
-- V2 顶层导航能说明 `distill` Phase 2 已从“总规划”进入“命令级合同规划”
+- Phase 2 主计划能指向本命令级 active plan。
+- `distill` 的产品和协议文档能明确引用本计划作为当前收敛入口。
+- 后续实现无需再依赖对话补充 `distill` Phase 2 的默认路径语义。
 
 ## Acceptance Criteria
 
-- `distill` Phase 2 的产品问题被收敛为可执行的命令级合同计划。
-- 后续实现团队不需要再靠对话判断“provider 缺失该失败还是回退”“映射覆盖不足算不算通过”。
-- 宿主模型参与后的稳定事实边界继续由 Harness 控制，并写成仓库事实源。
+- `distill` Phase 2 的默认入口、fallback / 状态语义、来源映射通过边界写成仓库事实源。
+- 宿主模型参与后仍由 Harness 控制最终状态、产物路径和结构化结果合同。
+- 后续实现可直接基于本计划展开，而不需要重新定义产品问题。
+
+## Exception Handling
+
+- 如果默认 host-first 与现有模式体系冲突，优先锁定用户可理解的模式语义，再决定是否保留旧模式作为兼容入口。
+- 如果覆盖率阈值无法在本轮稳定定义，至少先写清 unmatched 对最终状态的影响范围。
+- 如果某些 partial-success 场景会引入新的状态类型，必须先评估是否真的需要新增状态，而不是直接扩大结果模型。
 
 ## Verification
 
-- 检查 `distill` 的 `product.md` / `protocol.md` / `testing.md` / `acceptance.md` 是否都获得了明确的 Phase 2 输入
-- 检查 active index 与 Phase 2 主计划是否都能导航到本计划
-- 检查是否仍存在“CLI 层模式已定义，但宿主模型失败路径与映射不足语义未定义”的空洞
+- 检查 `docs/product-specs/v2/index.md` 是否与 `distill` 命令文档对齐。
+- 检查 `docs/product-specs/v2/commands/distill/product.md` 与 `protocol.md` 是否对同一组 Phase 2 问题给出一致口径。
+- 检查主计划与本命令级计划之间不存在范围漂移。
 
 ## References
 
 - `AGENTS.md`
+- `docs/QUALITY_SCORE.md`
+- `docs/RELIABILITY.md`
 - `docs/design-docs/harness-engineering.md`
+- `docs/exec-plans/active/harness-commander-v2/phase2-host-model-path-planning.md`
+- `docs/product-specs/v2/index.md`
 - `docs/product-specs/v2/commands/distill/product.md`
 - `docs/product-specs/v2/commands/distill/protocol.md`
-- `docs/exec-plans/active/harness-commander-v2/phase2-host-model-path-planning.md`

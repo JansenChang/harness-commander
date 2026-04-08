@@ -61,6 +61,8 @@
   - `docs/exec-plans/completed/2026-04-08-harness-commander-v2-phase1-archive/run-agents-check-preflight.md`
 - 当前 Phase 2 主计划：
   - `docs/exec-plans/active/harness-commander-v2/phase2-host-model-path-planning.md`
+- 当前 Phase 2 命令级计划：
+  - `docs/exec-plans/active/harness-commander-v2/run-agents-host-model-phase2-contracts.md`
 - 对齐 ULW：
   - ULW 1：阶段合同字段收敛
   - ULW 2：合同进入结果协议且保持兼容

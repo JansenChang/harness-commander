@@ -2,105 +2,108 @@
 
 ## Goal
 
-为 `run-agents` 的 Phase 2 锁定 `requirements` / `plan` 的宿主模型主路径合同，明确入口条件、阶段输入输出、fallback 语义与最终状态边界，让后续实现可以在不破坏 Harness 治理权的前提下推进。
+把 `run-agents` 从 Phase 1 的 deterministic baseline 推进到可实施的 Phase 2 产品规划，明确 `requirements` / `plan` 进入默认优先宿主模型主路径时的入口条件、阶段合同与 fallback 状态语义。
 
 ## Context
 
 - V2 Phase 1 已完成并归档：
-  - `run-agents` 固定阶段顺序
-  - `check` preflight 三态
-  - `meta.stage_contracts` 最小合同
-- 当前 Phase 2 主计划已确认：
-  - `run-agents` 只开放 `requirements` 与 `plan` 给宿主模型默认优先主路径
-  - `check`、`verify`、`pr-summary`、最终状态、阻断逻辑继续由 Harness 控制
-- 当前命令文档仍停留在“问题列出”层，尚未形成可直接进入实现的命令级合同计划。
+  - `run-agents` 已具备 `check -> requirements -> plan -> implement -> verify -> pr-summary` 的阶段合同基线
+  - `check` preflight、verify 阻断与最终状态语义已收敛
+- V2 已确认：
+  - `run-agents` 是治理主入口
+  - 只有 `requirements` 与 `plan` 允许进入宿主模型主路径
+  - `check`、`verify`、`pr-summary`、最终状态、阻断逻辑与产物路径继续由 Harness 控制
+- 当前尚未锁定的问题仍停留在产品/协议层，而不是实现层：
+  - 默认何时进入宿主模型主路径
+  - 宿主模型输出是摘要还是可重放任务包
+  - 宿主模型失败、超时、结构不完整后的状态组合如何对外呈现
+
+## Business Logic
+
+- Phase 2 对 `run-agents` 的核心不是“接 provider”，而是先锁定 CLI 对外语义。
+- 如果入口条件、阶段合同与 fallback 矩阵没有先落到文档，后续实现很容易出现：
+  - 模型调用成功但阶段合同不可消费
+  - fallback 已发生但结果看起来像主路径成功
+  - `warning` / `failure` 在阶段级与命令级含义漂移
+- 本计划先收敛产品和协议，不进入 runtime 或 provider 编排实现。
 
 ## Scope
 
-- 锁定 `requirements` / `plan` 进入宿主模型主路径的启动条件
-- 锁定两阶段的最小输入输出合同
-- 锁定 provider 缺失、模型失败、结构不完整时的 fallback / 最终状态矩阵
-- 同步 `product.md` / `protocol.md` / `testing.md` / `acceptance.md` 的 Phase 2 输入
+- 明确 `requirements` / `plan` 进入宿主模型主路径的前置条件
+- 明确 `requirements` / `plan` 的宿主模型输入输出最小合同
+- 明确 provider 缺失、模型失败、超时、结构不完整时的 fallback 与最终状态矩阵
+- 同步 `run-agents` 相关产品、协议和 V2 顶层导航
 
 ## Non-Goals
 
-- 不引入新的 runtime 阶段，例如 `docs`
-- 不设计 resume token / retry runtime / attempt 编排
-- 不让 `check`、`implement`、`verify`、`pr-summary` 进入宿主模型主路径
-- 不修改并发模型或多 agent 调度机制
-- 不直接进入代码实现
+- 不实现新的宿主模型 runtime
+- 不引入并发 agent 编排、恢复 / 重试 token 或 attempt 机制
+- 不把 `docs` 阶段加入当前 runtime
+- 不让 `check`、`verify`、`pr-summary` 进入宿主模型路径
+- 不修改现有 `run-agents` CLI 参数与代码行为
 
-## ULW 1: 锁定宿主模型主路径启动条件
+## ULW 1: 锁定宿主模型主路径入口条件
 
 ### 目标
 
-- 明确 `run-agents` 在什么前提下进入 `requirements` / `plan` 的 host-first 路径，以及 provider 不满足条件时如何处理。
+- 明确 `run-agents` 在什么前提下默认优先进入宿主模型主路径，以及缺失 prerequisite 时如何退回。
 
 ### 涉及范围
 
 - `docs/product-specs/v2/commands/run-agents/product.md`
 - `docs/product-specs/v2/commands/run-agents/protocol.md`
-- `docs/product-specs/v2/commands/run-agents/acceptance.md`
 
 ### 验收标准
 
-- 明确默认行为是“provider 就绪即进入主路径”还是仍需额外开关
-- 明确 provider 缺失、provider 不兼容、认证失败时的语义是 `failure` 还是 deterministic fallback
-- 明确 `requirements` / `plan` 之外所有阶段继续 `host_model_allowed=false`
+- 明确默认入口是否只依赖 provider 已配置，还是仍需额外开关 / 模式门。
+- 明确 provider 缺失、provider 不可用、provider 被禁用时，是命令级 `failure` 还是保守回退到 deterministic 路径。
+- 明确除 `requirements` / `plan` 外，其余阶段继续保持 `host_model_allowed=false`。
 
-## ULW 2: 锁定 `requirements` / `plan` 的最小阶段合同
+## ULW 2: 锁定 `requirements` / `plan` 的宿主模型合同
 
 ### 目标
 
-- 把宿主模型参与后的阶段合同固定为 Harness 可消费、可验证、可 fallback 的最小结构。
+- 明确 Harness 如何向宿主模型提供输入，以及如何消费宿主模型返回结果。
 
 ### 涉及范围
 
 - `docs/product-specs/v2/commands/run-agents/product.md`
 - `docs/product-specs/v2/commands/run-agents/protocol.md`
-- `docs/product-specs/v2/commands/run-agents/testing.md`
 
 ### 验收标准
 
-- `requirements` 与 `plan` 都明确：
-  - 输入
-  - 输出
-  - 阻断条件
-  - fallback
-  - 产物
-  - 是否允许宿主模型参加
-- 明确宿主模型输出是“摘要级结果”还是“可重放任务包”
-- 明确宿主模型返回结构不完整时，Harness 需要保留哪些稳定 fallback 事实
+- 明确 `requirements` / `plan` 发送给宿主模型的最小输入包结构。
+- 明确宿主模型返回的是“摘要级结果”还是“可重放任务包”，并把该决定写成协议事实。
+- 明确哪些字段属于宿主模型可生成内容，哪些字段仍必须由 Harness 根据本地事实填充。
 
-## ULW 3: 锁定 fallback 与最终状态组合矩阵
+## ULW 3: 锁定 fallback 与最终状态矩阵
 
 ### 目标
 
-- 明确“模型失败但命令继续”“模型失败且 fallback 也失败”“模型成功但 verify 后续阻断”等场景下的最终语义。
+- 让调用方能稳定理解“宿主模型失败，但命令仍继续”的真实语义。
 
 ### 涉及范围
 
+- `docs/product-specs/v2/commands/run-agents/product.md`
 - `docs/product-specs/v2/commands/run-agents/protocol.md`
-- `docs/product-specs/v2/commands/run-agents/acceptance.md`
-- `docs/product-specs/v2/commands/run-agents/testing.md`
+- `docs/RELIABILITY.md`
 
 ### 验收标准
 
-- 定义至少以下场景的命令级 `success` / `warning` / `failure` 语义：
+- 至少覆盖以下场景的阶段级与命令级语义：
   - provider 缺失
   - 宿主模型超时
   - 宿主模型返回空结果
   - 宿主模型返回结构不完整
   - 宿主模型失败后 deterministic fallback 成功
-  - 宿主模型失败后 deterministic fallback 失败
-- 明确 `check` preflight 三态与 Phase 2 host-first 路径如何组合
-- 明确 `verify` 与 `pr-summary` 的门禁语义不因宿主模型接入而放宽
+- 明确 fallback 事实必须如何进入 `meta.stage_contracts`、兼容字段与 summary。
+- 明确何时是命令级 `success`、何时是 `warning`、何时必须升级为 `failure`。
 
-## ULW 4: 同步命令级文档与导航入口
+## ULW 4: 同步导航并形成实现前移交物
 
 ### 目标
 
-- 让仓库能够直接反映 `run-agents` Phase 2 的合同收敛进度，而不是继续依赖总计划或对话补充。
+- 让仓库在进入实现前已经具备稳定的命令级事实源与计划入口。
 
 ### 涉及范围
 
@@ -110,26 +113,35 @@
 
 ### 验收标准
 
-- active index 能直接定位到本命令级 active plan
-- 主计划明确本文件是 `run-agents` 的命令级拆解入口
-- V2 顶层导航能说明 `run-agents` Phase 2 已从“总规划”进入“命令级合同规划”
+- Phase 2 主计划能指向本命令级 active plan。
+- `run-agents` 的产品和协议文档能明确引用本计划作为当前收敛入口。
+- 后续实现无需再依赖对话补充 `run-agents` Phase 2 的基础产品边界。
 
 ## Acceptance Criteria
 
-- `run-agents` Phase 2 的产品问题被收敛为可执行的命令级合同计划。
-- 后续实现团队不需要再靠口头澄清“什么时候走宿主模型”“失败后如何判定结果”。
-- `requirements` / `plan` 的宿主模型边界与 Harness 保留权责写成仓库事实源。
+- `run-agents` Phase 2 的入口条件、宿主模型合同、fallback / 状态矩阵写成仓库事实源。
+- `check`、`verify`、`pr-summary` 不进入宿主模型路径的边界明确且可导航。
+- 后续实现计划可直接基于本计划展开，而不必重新发明 CLI 语义。
+
+## Exception Handling
+
+- 如果“默认优先宿主模型”与现有 CLI 兼容性冲突，优先锁兼容语义，再决定是否需要新增显式模式。
+- 如果“可重放任务包”会扩大到新的 runtime 设计，必须明确标记为后续阶段，而不是混入本轮最小规划。
+- 如果某种 fallback 场景暂时无法细化到实现级，至少先写清命令级状态与留痕要求。
 
 ## Verification
 
-- 检查 `run-agents` 的 `product.md` / `protocol.md` / `testing.md` / `acceptance.md` 是否都有明确的 Phase 2 输入
-- 检查 active index 与 Phase 2 主计划是否都能导航到本计划
-- 检查是否仍存在“CLI 层已定义，但集成失败路径未定义”的合同空洞
+- 检查 `docs/product-specs/v2/index.md` 是否与 `run-agents` 命令文档对齐。
+- 检查 `docs/product-specs/v2/commands/run-agents/product.md` 与 `protocol.md` 是否对同一组 Phase 2 问题给出一致口径。
+- 检查主计划与本命令级计划之间不存在范围漂移。
 
 ## References
 
 - `AGENTS.md`
+- `docs/QUALITY_SCORE.md`
+- `docs/RELIABILITY.md`
 - `docs/design-docs/harness-engineering.md`
+- `docs/exec-plans/active/harness-commander-v2/phase2-host-model-path-planning.md`
+- `docs/product-specs/v2/index.md`
 - `docs/product-specs/v2/commands/run-agents/product.md`
 - `docs/product-specs/v2/commands/run-agents/protocol.md`
-- `docs/exec-plans/active/harness-commander-v2/phase2-host-model-path-planning.md`

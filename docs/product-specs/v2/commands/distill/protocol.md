@@ -100,3 +100,5 @@
   - 目标路径
   - fallback 记录
   - `section_sources` / `source_mapping_coverage` 的结构化合同
+- 当前命令级规划入口：
+  - `docs/exec-plans/active/harness-commander-v2/distill-host-first-phase2-contracts.md`

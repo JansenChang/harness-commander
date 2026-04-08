@@ -29,3 +29,8 @@
 - 当前 Phase 2 主计划：`phase2-host-model-path-planning.md`
 - `run-agents` 命令级计划：`run-agents-host-model-phase2-contracts.md`
 - `distill` 命令级计划：`distill-host-first-phase2-contracts.md`
+
+## 历史说明
+
+- 当前目录仍保留部分 Phase 1 计划副本，便于对照，但它们不再代表当前 active backlog。
+- Phase 1 的正式归档事实源以 `docs/exec-plans/completed/2026-04-08-harness-commander-v2-phase1-archive/` 为准。

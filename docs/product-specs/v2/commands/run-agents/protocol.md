@@ -99,6 +99,8 @@
   - `check`
   - `verify`
   - `pr-summary`
+- 当前命令级规划入口：
+  - `docs/exec-plans/active/harness-commander-v2/run-agents-host-model-phase2-contracts.md`
 
 ## 失败与回退语义
 

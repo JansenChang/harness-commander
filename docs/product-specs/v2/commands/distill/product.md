@@ -54,6 +54,8 @@
   - `docs/exec-plans/completed/2026-04-08-harness-commander-v2-phase1-archive/distill-integration-failure-coverage.md`
 - 当前 Phase 2 主计划：
   - `docs/exec-plans/active/harness-commander-v2/phase2-host-model-path-planning.md`
+- 当前 Phase 2 命令级计划：
+  - `docs/exec-plans/active/harness-commander-v2/distill-host-first-phase2-contracts.md`
 - 对齐 ULW：
   - ULW 1：锁定 extraction report 协议
   - ULW 2：四类 section 来源映射
