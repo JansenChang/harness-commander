@@ -15,6 +15,19 @@
   - `distill-host-first-phase2-contracts.md`
 - 当前阶段：V2 Phase 1 已归档，当前进入 Phase 2 宿主模型主路径产品规划
 
+## 产品开发进度
+
+- 已完成：
+  - V2 Phase 1 最小闭环归档
+  - Phase 2 顶层主计划
+  - Phase 2 命令级计划拆解
+- 正在推进：
+  - `run-agents-host-model-phase2-contracts.md`
+  - `distill-host-first-phase2-contracts.md`
+- 尚未开始：
+  - Phase 2 实现切片
+  - Phase 2 测试矩阵与集成补洞
+
 ## 下一步
 
 - 先锁定 `run-agents` 的宿主模型主路径边界与状态矩阵

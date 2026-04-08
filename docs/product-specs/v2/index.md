@@ -17,6 +17,21 @@
   - `docs/exec-plans/active/harness-commander-v2/distill-host-first-phase2-contracts.md`
 - 后续目标：推进宿主模型默认优先主路径与更强的治理联动
 
+## 产品开发进度
+
+- Phase 1：
+  - 已完成 `run-agents + check + distill` 最小闭环
+  - 已归档为正式基线
+- Phase 2 总规划：
+  - 已完成宿主模型主路径的顶层问题拆解
+  - 已拆成 `run-agents` 与 `distill` 两份命令级 active plan
+- Phase 2 当前推进：
+  - 优先收敛 `run-agents` 的入口条件、宿主模型合同与 fallback 状态矩阵
+  - 第二顺位收敛 `distill` 的默认入口、provider prerequisite 与 coverage 通过语义
+- 当前边界：
+  - 仍处于产品/协议收敛阶段
+  - 尚未进入 Phase 2 实现与测试矩阵补齐
+
 ## Phase 2 当前规划焦点
 
 - `run-agents`
