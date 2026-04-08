@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-- active（Phase 1）
+- phase1-complete / phase2-planning
 
 ## 结果协议总览
 
@@ -88,6 +88,17 @@
   - 阻断逻辑
   - 最终状态
   - 产物路径与命名
+
+## Phase 2 当前规划问题
+
+- `requirements` / `plan` 若切到默认优先宿主模型：
+  - 宿主模型输出是否仍只保留摘要，还是升级为可重放任务包
+  - provider 缺失时是直接 failure，还是保守 fallback 到 deterministic 路径
+  - 宿主模型返回结构不完整时，如何保留稳定 fallback 事实
+- 无论 Phase 2 如何推进，以下阶段继续保持 `host_model_allowed=false`：
+  - `check`
+  - `verify`
+  - `pr-summary`
 
 ## 失败与回退语义
 

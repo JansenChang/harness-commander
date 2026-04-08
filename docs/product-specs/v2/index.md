@@ -12,7 +12,22 @@
 - 基线来源：V1 已实现命令集
 - 当前完成：`run-agents + check + distill` 最小闭环与 deterministic baseline
 - 当前规划中：`run-agents + distill` 默认优先宿主模型主路径
+- 当前已启动的命令级规划：
+  - `docs/exec-plans/active/harness-commander-v2/run-agents-host-model-phase2-contracts.md`
+  - `docs/exec-plans/active/harness-commander-v2/distill-host-first-phase2-contracts.md`
 - 后续目标：推进宿主模型默认优先主路径与更强的治理联动
+
+## Phase 2 当前规划焦点
+
+- `run-agents`
+  - 只开放 `requirements` 与 `plan` 给宿主模型默认主路径
+  - 继续由 Harness 控制 `check` preflight、verify、最终状态与阶段合同
+- `distill`
+  - 评估默认入口是否从 `heuristic` 切到 host-first / auto
+  - 明确 provider prerequisite、fallback 事实与来源映射兼容边界
+- `check`
+  - 当前不进入 Phase 2 宿主模型主路径
+  - 仅保留后续更强治理联动的评估入口
 
 ## 已确认的 V2 产品决策
 

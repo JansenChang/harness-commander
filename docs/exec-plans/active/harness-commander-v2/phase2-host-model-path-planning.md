@@ -52,6 +52,16 @@
 - 明确 Phase 2 的最小闭环与非目标
 - 为命令级 Phase 2 active plans 提供输入
 
+## 已拆解的命令级 active plans
+
+- `run-agents-host-model-phase2-contracts.md`
+  - 收敛 `requirements` / `plan` 的 host-first 启动条件、阶段合同与状态矩阵
+- `distill-host-first-phase2-contracts.md`
+  - 收敛默认入口、provider prerequisite、fallback 语义与来源映射通过边界
+- 当前拆解顺序：
+  - 先收敛 `run-agents`
+  - 再收敛 `distill`
+
 ## Non-Goals
 
 - 不实现宿主模型新 runtime
@@ -115,7 +125,7 @@
 ## Acceptance Criteria
 
 - Phase 2 的产品目标、最小闭环、宿主模型边界与非目标写成仓库事实源。
-- `run-agents` 与 `distill` 的 Phase 2 规划可直接拆成后续命令级 active plans。
+- `run-agents` 与 `distill` 的 Phase 2 规划已拆成命令级 active plans，并可继续推进命令级合同收敛。
 - 不需要再靠对话补充 Phase 2 基本边界。
 
 ## Exception Handling

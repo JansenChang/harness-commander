@@ -130,6 +130,8 @@
   - V2 Phase 1 最小闭环归档：`docs/exec-plans/completed/2026-04-08-harness-commander-v2-phase1-archive.md`
 - 已启动：
   - V2 Phase 2 宿主模型主路径产品规划：`phase2-host-model-path-planning.md`
+  - `run-agents` Phase 2 命令级合同规划：`run-agents-host-model-phase2-contracts.md`
+  - `distill` Phase 2 命令级合同规划：`distill-host-first-phase2-contracts.md`
 - 当前选择：
   - 当前不继续补 Phase 1，而是进入 Phase 2 产品规划
   - 优先收敛 `run-agents` 与 `distill` 的“默认优先宿主模型，失败 fallback”边界

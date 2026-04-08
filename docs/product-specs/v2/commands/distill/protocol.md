@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-- active（Phase 1）
+- phase1-complete / phase2-planning
 
 ## 结果协议总览
 
@@ -88,3 +88,15 @@
 - 不依赖宿主模型决定最终状态或产物路径。
 - 映射不到来源时返回 `unmatched`，禁止伪造行号。
 - 结果优先“可解释”而不是“映射覆盖率看起来更高”。
+
+## Phase 2 当前规划问题
+
+- 若默认入口从 `heuristic` 切到 host-first / auto：
+  - provider 缺失时是否直接 failure，还是回退到 heuristic
+  - host-model 输出不足但未完全失败时，是否允许直接通过
+  - 来源映射覆盖不足时，是否需要引入新的通过阈值或继续沿用 `unmatched`
+- 无论 Phase 2 如何推进，以下事实继续由 Harness 控制：
+  - 最终状态
+  - 目标路径
+  - fallback 记录
+  - `section_sources` / `source_mapping_coverage` 的结构化合同
