@@ -122,8 +122,8 @@ def build_parser() -> argparse.ArgumentParser:
     distill_parser.add_argument(
         "--mode",
         choices=("heuristic", "host-model", "auto"),
-        default="heuristic",
-        help="提炼模式：heuristic（默认）、host-model、auto",
+        default="auto",
+        help="提炼模式：auto（默认）、heuristic、host-model",
     )
     distill_parser.add_argument(
         "--provider",

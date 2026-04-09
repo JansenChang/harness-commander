@@ -142,6 +142,40 @@ def assert_distill_mapping_meta(
     return extraction_report, section_sources, source_mapping_coverage
 
 
+def assert_distill_host_first_meta(
+    payload: dict[str, object],
+    *,
+    requested_mode: str,
+    execution_path: str,
+    host_attempted: bool,
+    provider_configured: bool,
+    provider_source: str,
+) -> dict[str, object]:
+    """断言 distill Phase 2 host-first 留痕字段稳定。"""
+
+    meta = payload.get("meta")
+    assert isinstance(meta, dict)
+    host_first = meta.get("host_first")
+    extraction_report = meta.get("extraction_report")
+    assert isinstance(host_first, dict)
+    assert isinstance(extraction_report, dict)
+    assert host_first["mode"] == requested_mode
+    assert host_first["host_model_allowed"] is (requested_mode in {"auto", "host-model"})
+    assert host_first["preferred_path"] == (
+        "host-model" if requested_mode in {"auto", "host-model"} else "heuristic"
+    )
+    assert host_first["provider_configured"] is provider_configured
+    assert host_first["provider_source"] == provider_source
+    assert host_first["host_attempted"] is host_attempted
+    assert host_first["selected_path"] == execution_path
+    assert meta["execution_path"] == execution_path
+    assert meta["host_attempted"] is host_attempted
+    assert extraction_report["execution_path"] == execution_path
+    assert extraction_report["host_attempted"] is host_attempted
+    assert extraction_report["host_first"] == host_first
+    return host_first
+
+
 def flatten_section_sources(
     section_sources: dict[str, list[dict[str, object]]],
 ) -> list[dict[str, object]]:
@@ -183,6 +217,17 @@ def assert_stage_contracts_shape(
         assert isinstance(contract["fallback"], dict)
         assert isinstance(contract["artifacts"], list)
         assert isinstance(contract["host_model_allowed"], bool)
+        if contract["stage"] in {"requirements", "plan", "implement", "verify"}:
+            handoff_keys = {
+                "summary",
+                "source_inputs",
+                "key_decisions",
+                "open_questions",
+                "handoff_notes",
+                "execution_path",
+                "host_attempted",
+            }
+            assert handoff_keys.issubset(set(contract["outputs"].keys()))
     return stage_contracts
 
 
@@ -195,6 +240,17 @@ def find_stage_contract(
         if contract.get("stage") == stage:
             return contract
     raise AssertionError(f"missing stage contract: {stage}")
+
+
+def find_agent_run(
+    agent_runs: list[dict[str, object]], stage: str
+) -> dict[str, object]:
+    """从兼容字段中定位指定阶段。"""
+
+    for agent_run in agent_runs:
+        if agent_run.get("stage") == stage:
+            return agent_run
+    raise AssertionError(f"missing agent run: {stage}")
 
 
 def stage_has_blocking(stage_contract: dict[str, object]) -> bool:
@@ -216,6 +272,134 @@ def stage_uses_fallback(stage_contract: dict[str, object]) -> bool:
     fallback = stage_contract.get("fallback")
     assert isinstance(fallback, dict)
     return fallback.get("applied") is True
+
+
+def assert_slot_outputs_shape(
+    stage_contracts: list[dict[str, object]], stage: str
+) -> dict[str, object]:
+    """断言四槽位阶段输出具备统一 handoff 合同字段。"""
+
+    contract = find_stage_contract(stage_contracts, stage)
+    outputs = contract["outputs"]
+    assert isinstance(outputs, dict)
+    assert isinstance(outputs["summary"], str)
+    assert isinstance(outputs["source_inputs"], list)
+    assert isinstance(outputs["key_decisions"], list)
+    assert isinstance(outputs["open_questions"], list)
+    assert isinstance(outputs["handoff_notes"], list)
+    assert outputs["execution_path"] in {
+        "deterministic",
+        "host_model",
+        "deterministic_fallback",
+    }
+    assert isinstance(outputs["host_attempted"], bool)
+    return contract
+
+
+def assert_run_agents_four_slot_handoff(
+    payload: dict[str, object],
+    stage_contracts: list[dict[str, object]],
+) -> None:
+    """断言 check/requirements/plan/verify 的 handoff 事实稳定。"""
+
+    meta = payload.get("meta")
+    assert isinstance(meta, dict)
+
+    check_contract = find_stage_contract(stage_contracts, "check")
+    requirements_contract = assert_slot_outputs_shape(stage_contracts, "requirements")
+    plan_contract = assert_slot_outputs_shape(stage_contracts, "plan")
+    implement_contract = assert_slot_outputs_shape(stage_contracts, "implement")
+    verify_contract = assert_slot_outputs_shape(stage_contracts, "verify")
+    pr_summary_contract = find_stage_contract(stage_contracts, "pr-summary")
+
+    check_outputs = check_contract["outputs"]
+    requirements_outputs = requirements_contract["outputs"]
+    plan_outputs = plan_contract["outputs"]
+    implement_inputs = implement_contract["inputs"]
+    implement_outputs = implement_contract["outputs"]
+    verify_outputs = verify_contract["outputs"]
+    pr_summary_inputs = pr_summary_contract["inputs"]
+    preflight = meta.get("check_preflight")
+
+    assert isinstance(check_outputs, dict)
+    assert isinstance(requirements_outputs, dict)
+    assert isinstance(plan_outputs, dict)
+    assert isinstance(implement_inputs, dict)
+    assert isinstance(implement_outputs, dict)
+    assert isinstance(verify_outputs, dict)
+    assert isinstance(pr_summary_inputs, dict)
+    assert isinstance(preflight, dict)
+
+    assert preflight["ready_for_run_agents"] == check_outputs["ready_for_run_agents"]
+    assert preflight["governance_entry"] == check_outputs["governance_entry"]
+    assert implement_inputs["requirements_stage"] == requirements_contract["stage"]
+    assert implement_inputs["plan_stage"] == plan_contract["stage"]
+    assert plan_outputs["source_inputs"][1]["ref"] == requirements_contract["stage"]
+    assert implement_outputs["source_inputs"][0]["ref"] == requirements_contract["stage"]
+    assert implement_outputs["source_inputs"][1]["ref"] == plan_contract["stage"]
+    assert implement_outputs["requirements_summary"] == requirements_outputs["summary"]
+    assert implement_outputs["plan_summary"] == plan_outputs["summary"]
+    assert pr_summary_inputs["verify_stage"] == verify_contract["stage"]
+    requirements_host_first = requirements_outputs["host_first"]
+    plan_host_first = plan_outputs["host_first"]
+    assert isinstance(requirements_host_first, dict)
+    assert isinstance(plan_host_first, dict)
+    assert requirements_host_first["future_host_first_candidate"] is True
+    assert plan_host_first["future_host_first_candidate"] is True
+    assert requirements_host_first["host_attempted"] is False
+    assert plan_host_first["host_attempted"] is False
+    assert requirements_host_first["selected_path"] == requirements_outputs["execution_path"]
+    assert plan_host_first["selected_path"] == plan_outputs["execution_path"]
+    assert verify_outputs["source_inputs"][0]["type"] == "verify_status_file"
+    assert check_contract["host_model_allowed"] is False
+    assert requirements_contract["host_model_allowed"] is True
+    assert plan_contract["host_model_allowed"] is True
+    assert implement_contract["host_model_allowed"] is False
+    assert verify_contract["host_model_allowed"] is False
+    assert pr_summary_contract["host_model_allowed"] is False
+
+
+def assert_run_agents_compatible_fields_consistent(
+    payload: dict[str, object],
+    stage_contracts: list[dict[str, object]],
+) -> None:
+    """断言兼容字段 agent_runs 与结构化阶段合同指向同一份事实。"""
+
+    meta = payload.get("meta")
+    assert isinstance(meta, dict)
+    agent_runs = meta.get("agent_runs")
+    assert isinstance(agent_runs, list)
+
+    for agent_run in agent_runs:
+        assert isinstance(agent_run, dict)
+        contract = find_stage_contract(stage_contracts, str(agent_run["stage"]))
+        outputs = contract["outputs"]
+        assert agent_run["status"] == contract["status"]
+        if agent_run["stage"] == "verify":
+            if outputs["verify_status"] == "missing":
+                assert "未找到验证状态文件" in str(agent_run["summary"])
+            else:
+                assert outputs["verify_status"] in str(agent_run["summary"])
+            continue
+        if (
+            agent_run["stage"] == "pr-summary"
+            and agent_run["status"] == "warning"
+            and outputs.get("generated") is False
+        ):
+            assert "PR 摘要" in str(agent_run["summary"])
+            assert outputs["artifact_path"] is None
+        else:
+            assert agent_run["summary"] == outputs["summary"]
+        if "artifact_path" in agent_run:
+            assert agent_run["artifact_path"] == outputs["artifact_path"]
+
+    pr_summary_contract = find_stage_contract(stage_contracts, "pr-summary")
+    if pr_summary_contract["artifacts"]:
+        assert payload["artifacts"]
+        assert payload["artifacts"][0]["path"] == pr_summary_contract["outputs"]["artifact_path"]
+        assert payload["artifacts"][0]["action"] == pr_summary_contract["artifacts"][0]["action"]
+    else:
+        assert payload["artifacts"] == []
 
 
 def build_check_preflight_result(
@@ -448,7 +632,9 @@ def test_command_chaining(tmp_path: Path, capsys) -> None:
     migration_file.parent.mkdir(parents=True, exist_ok=True)
     migration_file.write_text("create table reports(id integer primary key);\n", encoding="utf-8")
 
-    exit_code = main(["-p", str(tmp_path), "--json", "distill", str(test_doc)])
+    exit_code = main(
+        ["-p", str(tmp_path), "--json", "distill", str(test_doc), "--mode", "heuristic"]
+    )
     captured = capsys.readouterr()
     assert exit_code == 0
     distill_result = json.loads(captured.out.strip())
@@ -680,6 +866,95 @@ def test_host_model_distill_json_contract(tmp_path: Path, capsys) -> None:
     assert "回退到规则提炼路径" in payload["summary"]
 
 
+def test_distill_defaults_to_auto_and_uses_host_model_when_provider_available_integration(
+    tmp_path: Path, capsys
+) -> None:
+    """默认 distill 入口应走 auto，并在 provider 可用时优先宿主模型。"""
+
+    exit_code = main(["-p", str(tmp_path), "init"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    write_provider_config(tmp_path, default_provider="codex")
+
+    test_doc = tmp_path / "requirements.md"
+    test_doc.write_text("# 任意文档\n\n原始内容。\n", encoding="utf-8")
+
+    with patch(
+        "harness_commander.application.commands.distill_with_host_model",
+        return_value={
+            "goals": ["沉淀项目约束"],
+            "rules": ["必须保留结构化结果合同"],
+            "limits": ["不新增 CLI 参数"],
+            "prohibitions": ["不得伪造 fallback 事实"],
+        },
+    ):
+        exit_code = main(["-p", str(tmp_path), "--json", "distill", str(test_doc)])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out.strip())
+
+    assert exit_code == 0
+    assert payload["command"] == "distill"
+    assert payload["meta"]["distill_mode"] == "auto"
+    assert payload["meta"]["extraction_source"] == "host-model"
+    assert payload["meta"]["fallback_from"] is None
+    assert payload["meta"]["provider"] == "codex"
+    assert payload["meta"]["provider_source"] == "default_provider"
+    assert_distill_host_first_meta(
+        payload,
+        requested_mode="auto",
+        execution_path="host-model",
+        host_attempted=True,
+        provider_configured=True,
+        provider_source="default_provider",
+    )
+
+
+def test_distill_defaults_to_auto_and_keeps_heuristic_baseline_without_provider_integration(
+    tmp_path: Path, capsys
+) -> None:
+    """默认 distill 入口在 provider 缺失时应降级，不应直接失败。"""
+
+    exit_code = main(["-p", str(tmp_path), "init"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+
+    test_doc = tmp_path / "requirements.md"
+    test_doc.write_text(
+        "# 需求文档\n\n## 业务目标\n构建一个测试系统\n\n## 核心需求\n1. 用户管理\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(["-p", str(tmp_path), "--json", "distill", str(test_doc)])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out.strip())
+
+    assert exit_code == 0
+    assert payload["command"] == "distill"
+    assert payload["status"] == "warning"
+    assert payload["meta"]["distill_mode"] == "auto"
+    assert payload["meta"]["extraction_source"] == "heuristic"
+    assert payload["meta"]["fallback_from"] == "host-model"
+    assert payload["meta"]["fallback_reason"] == "provider_not_configured"
+    assert payload["meta"]["provider"] is None
+    assert payload["meta"]["provider_source"] == "deterministic_baseline"
+    host_first = assert_distill_host_first_meta(
+        payload,
+        requested_mode="auto",
+        execution_path="heuristic_fallback",
+        host_attempted=False,
+        provider_configured=False,
+        provider_source="deterministic_baseline",
+    )
+    assert any(
+        warning["code"] == "distill_fallback_to_heuristic"
+        for warning in payload["warnings"]
+    )
+    extraction_report, _, _ = assert_distill_mapping_meta(payload)
+    assert extraction_report["fallback"]["applied"] is True
+    assert extraction_report["fallback"]["reason"] == "provider_not_configured"
+    assert host_first["fallback_applied"] is True
+
+
 def test_distill_dry_run_summary_matches_artifact_integration(
     tmp_path: Path, capsys
 ) -> None:
@@ -695,7 +970,18 @@ def test_distill_dry_run_summary_matches_artifact_integration(
         encoding="utf-8",
     )
 
-    exit_code = main(["-p", str(tmp_path), "--json", "distill", str(test_doc), "--dry-run"])
+    exit_code = main(
+        [
+            "-p",
+            str(tmp_path),
+            "--json",
+            "distill",
+            str(test_doc),
+            "--mode",
+            "heuristic",
+            "--dry-run",
+        ]
+    )
     captured = capsys.readouterr()
     payload = json.loads(captured.out.strip())
 
@@ -720,7 +1006,9 @@ def test_distill_insufficient_extraction_returns_stable_failure_integration(
     test_doc = tmp_path / "brief.md"
     test_doc.write_text("# 简短文档\n\n只有一句描述。\n", encoding="utf-8")
 
-    exit_code = main(["-p", str(tmp_path), "--json", "distill", str(test_doc)])
+    exit_code = main(
+        ["-p", str(tmp_path), "--json", "distill", str(test_doc), "--mode", "heuristic"]
+    )
     captured = capsys.readouterr()
     payload = json.loads(captured.out.strip())
 
@@ -952,6 +1240,8 @@ def test_run_agents_preflight_success_keeps_verify_pr_summary_semantics_integrat
     assert not stage_has_blocking(verify_contract)
     assert pr_summary_contract["status"] == "success"
     assert pr_summary_contract["artifacts"]
+    assert_run_agents_four_slot_handoff(payload, stage_contracts)
+    assert_run_agents_compatible_fields_consistent(payload, stage_contracts)
 
 
 def test_run_agents_explicit_plan_override_keeps_preflight_moving_integration(
@@ -1180,6 +1470,66 @@ def test_run_agents_uses_configured_provider_and_override_integration(
     assert override_payload["meta"]["provider_source"] == "override"
 
 
+def test_run_agents_keeps_deterministic_baseline_when_provider_is_unavailable_integration(
+    tmp_path: Path, capsys
+) -> None:
+    """provider 缺失时，integration 层也应允许 deterministic baseline 继续。"""
+
+    exit_code = main(["-p", str(tmp_path), "init"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    spec_file, plan_file = create_run_agents_inputs(tmp_path)
+
+    verify_dir = tmp_path / ".claude/tmp"
+    verify_dir.mkdir(parents=True, exist_ok=True)
+    (verify_dir / "last-verify.status").write_text("PASS\n", encoding="utf-8")
+    (verify_dir / "verification-summary.md").write_text(
+        "- pytest all passed\n",
+        encoding="utf-8",
+    )
+
+    with patch(
+        "harness_commander.application.commands.run_check",
+        return_value=build_check_preflight_result(status=ResultStatus.SUCCESS),
+    ):
+        exit_code = main(
+            [
+                "-p",
+                str(tmp_path),
+                "--json",
+                "run-agents",
+                "--spec",
+                str(spec_file),
+                "--plan",
+                str(plan_file),
+                "--dry-run",
+            ]
+        )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out.strip())
+
+    assert exit_code == 0
+    assert payload["status"] == "success"
+    assert payload["meta"]["provider"] is None
+    assert payload["meta"]["provider_source"] == "deterministic_baseline"
+    stage_contracts = assert_stage_contracts_shape(
+        payload,
+        expected_stages=["check", "requirements", "plan", "implement", "verify", "pr-summary"],
+    )
+    requirements_contract = find_stage_contract(stage_contracts, "requirements")
+    plan_contract = find_stage_contract(stage_contracts, "plan")
+    assert requirements_contract["host_model_allowed"] is True
+    assert plan_contract["host_model_allowed"] is True
+    assert find_stage_contract(stage_contracts, "implement")["host_model_allowed"] is False
+    assert find_stage_contract(stage_contracts, "verify")["host_model_allowed"] is False
+    assert find_stage_contract(stage_contracts, "pr-summary")["host_model_allowed"] is False
+    assert requirements_contract["outputs"]["host_first"]["provider_configured"] is False
+    assert requirements_contract["outputs"]["host_first"]["provider_source"] == "deterministic_baseline"
+    assert plan_contract["outputs"]["host_first"]["provider_configured"] is False
+    assert_run_agents_four_slot_handoff(payload, stage_contracts)
+    assert_run_agents_compatible_fields_consistent(payload, stage_contracts)
+
+
 
 def test_run_agents_json_contract(tmp_path: Path, capsys) -> None:
     """run-agents 应返回稳定 JSON 协议。"""
@@ -1234,6 +1584,12 @@ def test_run_agents_json_contract(tmp_path: Path, capsys) -> None:
     assert stage_has_blocking(verify_contract)
     assert pr_summary_contract["status"] == "warning"
     assert stage_has_blocking(pr_summary_contract)
+    assert verify_contract["outputs"]["verify_status"] == "missing"
+    assert verify_contract["outputs"]["verification_summary"] == ""
+    assert not stage_uses_fallback(verify_contract)
+    assert not stage_uses_fallback(pr_summary_contract)
+    assert_run_agents_four_slot_handoff(result, stage_contracts)
+    assert_run_agents_compatible_fields_consistent(result, stage_contracts)
 
 
 def test_run_agents_blocks_pr_summary_for_non_pass_verify_status_integration(
@@ -1349,6 +1705,10 @@ def test_run_agents_generates_fallback_verification_block_when_summary_is_missin
     assert verify_contract["status"] == "success"
     assert stage_uses_fallback(verify_contract)
     assert stage_uses_fallback(pr_summary_contract)
+    assert verify_contract["fallback"]["reason"] == "verification_summary_missing"
+    assert pr_summary_contract["outputs"]["verification_summary_used"] is False
+    assert_run_agents_four_slot_handoff(payload, stage_contracts)
+    assert_run_agents_compatible_fields_consistent(payload, stage_contracts)
 
 
 def test_run_agents_avoids_overwriting_existing_pr_summary_file(
@@ -1417,6 +1777,8 @@ def test_run_agents_avoids_overwriting_existing_pr_summary_file(
     assert pr_summary_contract["status"] == "success"
     assert not stage_uses_fallback(pr_summary_contract)
     assert pr_summary_contract["artifacts"]
+    assert_run_agents_four_slot_handoff(payload, stage_contracts)
+    assert_run_agents_compatible_fields_consistent(payload, stage_contracts)
 
 
 def test_check_reports_ready_governance_entry_integration(

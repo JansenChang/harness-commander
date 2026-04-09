@@ -2,7 +2,28 @@
 
 ## 当前状态
 
-- phase1-complete / phase2-planning
+- phase1-complete / phase2-implementation-slice
+
+## CLI 入口
+
+| 项 | 定义 |
+| --- | --- |
+| 命令 | `harness distill <source>` |
+| 参数 | `-p, --root`；`<source>`；`--mode heuristic\|host-model\|auto`；`--provider <name>`；`--dry-run` |
+| 默认模式 | `auto` |
+
+## 模式语义
+
+- `heuristic`
+  - 强制本地规则提炼
+  - 不尝试宿主模型
+- `host-model`
+  - 强制尝试宿主模型入口
+  - provider 缺失时命令 `failure`
+- `auto`
+  - Phase 2 的默认 host-first 入口
+  - provider 可用时优先尝试宿主模型
+  - provider 缺失、宿主模型失败或返回结构不完整时，回退到 heuristic
 
 ## 结果协议总览
 
@@ -13,92 +34,107 @@
   - `fallback_reason`
   - `extracted_section_count`
   - `unresolved_sections`
-- 新增来源可追踪字段：
+  - `provider`
+  - `provider_source`
+  - `execution_path`
+  - `host_attempted`
+- 保持现有结构化字段：
   - `extraction_report`
   - `section_sources`
   - `source_mapping_coverage`
+  - `host_first`
 
-## 新增字段定义
+## Phase 2 host-first 留痕
 
-### `extraction_report`
+- `meta.execution_path`
+  - `heuristic`
+  - `host-model`
+  - `heuristic_fallback`
+- `meta.host_attempted`
+  - 是否真实尝试过宿主模型
+- `meta.host_first`
+  - `mode`
+  - `host_model_allowed`
+  - `preferred_path`
+  - `provider`
+  - `provider_configured`
+  - `provider_source`
+  - `provider_resolution_reason`
+  - `host_attempted`
+  - `selected_path`
+  - `fallback_applied`
+  - `fallback_from`
+  - `fallback_reason`
+- `meta.extraction_report` 必须同步保留：
+  - `execution_path`
+  - `host_attempted`
+  - `host_first`
 
-- 类型：`object`
-- 最小字段：
-  - `sections`: 四类 section 的条目数摘要
-  - `unresolved_sections`
-  - `extraction_source`
-  - `fallback`: 是否发生、来源与原因
-  - `mapping_summary`: 映射命中统计
+## Phase 2 状态语义
 
-### `section_sources`
-
-- 类型：`object`
-- 键：`goals` / `rules` / `limits` / `prohibitions`
-- 每个键的值：来源条目数组
-- 每个来源条目最小字段：
-  - `text`: 提炼出的条目文本
-  - `mapping_status`: `mapped` / `unmatched`
-  - `line`: 命中行号；未命中时为 `null`
-  - `snippet`: 命中行的简短摘要；未命中时为 `null`
-  - `mapping_strategy`: `heuristic` / `host-model`
-
-### `source_mapping_coverage`
-
-- 类型：`object`
-- 最小字段：
-  - `mapped_items`
-  - `unmatched_items`
-  - `total_items`
-  - `coverage_ratio`
-  - `mapped_ratio`
-
-## 判定语义（Phase 1）
-
-- heuristic 模式：
-  - 能定位则输出 `mapped + line`
-  - 不能定位则输出 `unmatched`
-- host-model / auto 模式：
-  - 不强制要求全部可定位
-  - 不能可靠定位时必须显式 `unmatched`
-- `unmatched` 不单独触发 failure；除非提炼本身已不足（沿用 `distillation_insufficient`）。
+- 默认 `auto` 成功走宿主模型：
+  - `meta.distill_mode = auto`
+  - `meta.extraction_source = host-model`
+  - `fallback_from = null`
+- 默认 `auto` 发生 fallback：
+  - `meta.distill_mode = auto`
+  - `meta.extraction_source = heuristic`
+  - `fallback_from = host-model`
+  - `fallback_reason` 必须存在
+  - `execution_path = heuristic_fallback`
+  - 命令最终至少为 `warning`
+- `host-model` 缺少 provider：
+  - 命令 `failure`
+  - 错误码 `provider_not_configured`
 - `distillation_insufficient`：
-  - 命令结果为 `failure`
-  - `meta.extraction_report`、`meta.section_sources`、`meta.source_mapping_coverage` 仍需完整返回
+  - 继续是命令级 `failure`
+  - `meta.extraction_report`、`meta.section_sources`、`meta.source_mapping_coverage` 仍需返回
   - `artifacts` 必须为空
-  - 真实文件不得落盘到 `docs/references/*-llms.txt`
 
-## 参考材料输出约束
+## fallback 规则
 
-- 生成的 `*-llms.txt` 需追加“来源映射”区块。
-- 区块应包含：
-  - 四类 section 的映射摘要
-  - unmatched 条目统计
-- 不应破坏现有参考材料主体结构。
+- 以下场景允许当前 host-attempting 模式回退到 heuristic：
+  - `auto` 下 provider 缺失
+  - 宿主模型调用失败
+  - 宿主模型返回空结构或结构不完整
+- `host-model` 的 provider prerequisite 仍是严格边界：
+  - provider 缺失时直接 `failure`
+- fallback 后必须保留：
+  - `warnings[].code = distill_fallback_to_heuristic`
+  - `meta.fallback_from`
+  - `meta.fallback_reason`
+  - `meta.extraction_report.fallback`
+- fallback 不允许伪装成完整 host-model 成功。
 
-## 兼容性要求
+## 来源映射与 coverage
 
-- 现有消费者依赖字段必须继续可用。
-- 新字段作为附加，不替代现有 fallback 语义。
-- `summary`、`warnings/errors`、`meta` 必须指向同一份事实。
-- failure 路径下，文件产物事实也必须与结果一致，不能出现“failure 但已创建正式参考材料”。
-- dry-run 路径下，`summary` 不得伪造“已创建正式参考材料”。
+- `section_sources` / `source_mapping_coverage` 继续由 Harness 生成和校验。
+- `unmatched` 继续是允许状态：
+  - 不能伪造行号或 snippet
+  - 不单独触发 failure
+- 当前切片不引入新的 coverage threshold。
 
-## deterministic baseline
+## 产物与 dry-run 约束
 
-- 不依赖宿主模型决定最终状态或产物路径。
-- 映射不到来源时返回 `unmatched`，禁止伪造行号。
-- 结果优先“可解释”而不是“映射覆盖率看起来更高”。
+- 成功或 warning 且未触发 `distillation_insufficient` 时，可生成 `docs/references/*-llms.txt`
+- dry-run 下仅返回 `would_create` / `would_overwrite`
+- dry-run `summary` 不得伪造“已正式生成参考材料”
+- failure 路径下，不允许真实落盘正式参考材料
 
-## Phase 2 当前规划问题
+## Harness 控制边界
 
-- 若默认入口从 `heuristic` 切到 host-first / auto：
-  - provider 缺失时是否直接 failure，还是回退到 heuristic
-  - host-model 输出不足但未完全失败时，是否允许直接通过
-  - 来源映射覆盖不足时，是否需要引入新的通过阈值或继续沿用 `unmatched`
-- 无论 Phase 2 如何推进，以下事实继续由 Harness 控制：
+- 以下事实继续由 Harness 控制：
   - 最终状态
   - 目标路径
   - fallback 记录
-  - `section_sources` / `source_mapping_coverage` 的结构化合同
-- 当前命令级规划入口：
+  - `section_sources`
+  - `source_mapping_coverage`
+  - `extraction_report`
+- 宿主模型不接管结果合同和产物事实。
+
+## 当前命令级计划入口
+
+- 当前实现切片归档：
+  - `docs/exec-plans/completed/2026-04-08-harness-commander-v2-phase2-implementation-slice-archive.md`
+- 命令级计划参考：
   - `docs/exec-plans/active/harness-commander-v2/distill-host-first-phase2-contracts.md`

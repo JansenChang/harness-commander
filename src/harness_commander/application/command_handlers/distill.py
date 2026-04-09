@@ -33,34 +33,52 @@ class DistillDependencies:
     supported_providers: tuple[str, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class DistillProviderContext:
+    """描述 distill 当前可用的 provider 事实。"""
+
+    provider: str | None
+    provider_source: str
+    provider_configured: bool
+    resolution_reason: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class DistillExecutionResult:
+    """描述一次 distill 执行的提炼结果和路径事实。"""
+
+    distilled_content: str
+    extraction_report: dict[str, Any]
+    execution_path: str
+    host_attempted: bool
+
+
 def run_distill(
     root: Path,
     *,
     source_path: str,
     dry_run: bool,
-    mode: str = "heuristic",
+    mode: str = "auto",
     provider: str | None = None,
     deps: DistillDependencies,
 ) -> CommandResult:
     """将长文档压缩为参考材料。"""
 
-    normalized_provider: str | None = None
-    provider_source = "not_used"
-    if mode in {"host-model", "auto"}:
-        normalized_provider, provider_source, _ = deps.resolve_effective_provider(
-            root,
-            override=provider,
-            persist_last_resolved=False,
-            dry_run=dry_run,
-        )
+    provider_context = _resolve_distill_provider_context(
+        root=root,
+        mode=mode,
+        provider=provider,
+        dry_run=dry_run,
+        deps=deps,
+    )
     LOGGER.info(
         "开始执行 distill 命令 root=%s source_path=%s dry_run=%s mode=%s provider=%s provider_source=%s",
         root,
         source_path,
         dry_run,
         mode,
-        normalized_provider,
-        provider_source,
+        provider_context.provider,
+        provider_context.provider_source,
     )
 
     source_file = Path(source_path)
@@ -90,13 +108,15 @@ def run_distill(
             detail={"source_path": str(source_file)},
         ) from error
 
-    distilled_content, extraction_report = _run_distill_extraction(
+    execution = _run_distill_extraction(
         content=content,
         source_name=source_name,
         mode=selected_mode,
-        provider=normalized_provider,
+        provider_context=provider_context,
         deps=deps,
     )
+    distilled_content = execution.distilled_content
+    extraction_report = execution.extraction_report
     extraction_source = extraction_report["extraction_source"]
     fallback_from = extraction_report["fallback_from"]
     fallback_reason = extraction_report["fallback_reason"]
@@ -113,12 +133,14 @@ def run_distill(
         warnings.append(
             CommandMessage(
                 code="distill_fallback_to_heuristic",
-                message="宿主模型结果不可用，已回退到规则提炼路径。",
+                message=_build_distill_fallback_message(fallback_reason),
                 location=str(source_file),
                 detail={
                     "source_path": str(source_file),
                     "fallback_from": fallback_from,
                     "fallback_reason": fallback_reason,
+                    "execution_path": execution.execution_path,
+                    "host_attempted": execution.host_attempted,
                 },
             )
         )
@@ -167,6 +189,7 @@ def run_distill(
         target_name=target_name,
         dry_run=dry_run,
         fallback_from=fallback_from,
+        fallback_reason=fallback_reason,
         unresolved_sections=unresolved_sections,
     )
     LOGGER.info(
@@ -203,10 +226,56 @@ def run_distill(
             "fallback_reason": fallback_reason,
             "model_provider": model_provider,
             "model_name": model_name,
-            "provider": normalized_provider,
-            "provider_source": provider_source,
+            "provider": provider_context.provider,
+            "provider_source": provider_context.provider_source,
+            "execution_path": execution.execution_path,
+            "host_attempted": execution.host_attempted,
+            "host_first": extraction_report["host_first"],
             "supported_providers": list(deps.supported_providers),
         },
+    )
+
+
+def _resolve_distill_provider_context(
+    *,
+    root: Path,
+    mode: str,
+    provider: str | None,
+    dry_run: bool,
+    deps: DistillDependencies,
+) -> DistillProviderContext:
+    """把 distill 的 provider 解析为可选上下文。"""
+
+    if mode == "heuristic":
+        return DistillProviderContext(
+            provider=None,
+            provider_source="not_used",
+            provider_configured=False,
+            resolution_reason="heuristic_mode",
+        )
+
+    try:
+        normalized_provider, provider_source, _ = deps.resolve_effective_provider(
+            root,
+            override=provider,
+            persist_last_resolved=False,
+            dry_run=dry_run,
+        )
+    except HarnessCommanderError as error:
+        if error.code != "provider_not_configured" or mode == "host-model":
+            raise
+        return DistillProviderContext(
+            provider=None,
+            provider_source="deterministic_baseline",
+            provider_configured=False,
+            resolution_reason=error.code,
+        )
+
+    return DistillProviderContext(
+        provider=normalized_provider,
+        provider_source=provider_source,
+        provider_configured=normalized_provider is not None,
+        resolution_reason="resolved" if normalized_provider is not None else None,
     )
 
 
@@ -217,6 +286,7 @@ def _build_distill_summary(
     target_name: str,
     dry_run: bool,
     fallback_from: str | None,
+    fallback_reason: str | None,
     unresolved_sections: list[str],
 ) -> str:
     if status == ResultStatus.FAILURE:
@@ -229,12 +299,18 @@ def _build_distill_summary(
 
     notes: list[str] = []
     if fallback_from:
-        notes.append("宿主模型结果不可用，已回退到规则提炼路径。")
+        notes.append(_build_distill_fallback_message(fallback_reason))
     if unresolved_sections:
         notes.append(f"仍有 {len(unresolved_sections)} 类核心 section 待人工复核。")
     if notes:
         summary = f"{summary} {' '.join(notes)}"
     return summary
+
+
+def _build_distill_fallback_message(fallback_reason: str | None) -> str:
+    if fallback_reason == "provider_not_configured":
+        return "未找到可用 provider，已回退到规则提炼路径。"
+    return "宿主模型结果不可用，已回退到规则提炼路径。"
 
 
 def _classify_distill_source(source_file: Path) -> str:
@@ -251,9 +327,9 @@ def _run_distill_extraction(
     content: str,
     source_name: str,
     mode: str,
-    provider: str | None,
+    provider_context: DistillProviderContext,
     deps: DistillDependencies,
-) -> tuple[str, dict[str, Any]]:
+) -> DistillExecutionResult:
     if mode not in {"heuristic", "host-model", "auto"}:
         raise HarnessCommanderError(
             code="invalid_distill_mode",
@@ -267,52 +343,79 @@ def _run_distill_extraction(
     fallback_reason: str | None = None
     model_provider: str | None = None
     model_name: str | None = None
+    host_attempted = False
+    execution_path = "heuristic"
 
     if mode in {"host-model", "auto"}:
-        if provider is None:
-            raise HarnessCommanderError(
-                code="provider_not_configured",
-                message="当前模式需要可用 provider，请先执行 harness install-provider 或显式传入 --provider。",
-                location="provider",
-            )
-        model_provider, model_name = deps.provider_meta(provider)
-        try:
-            structured = deps.distill_with_host_model(
-                provider=provider,
-                source_name=source_name,
-                content=content,
-            )
-        except deps.host_model_error_cls as error:
-            fallback_from = "host-model"
-            fallback_reason = str(error)
+        if provider_context.provider is None:
+            if mode == "auto":
+                fallback_from = "host-model"
+                fallback_reason = "provider_not_configured"
+            else:
+                raise HarnessCommanderError(
+                    code="provider_not_configured",
+                    message="当前模式需要可用 provider，请先执行 harness install-provider 或显式传入 --provider。",
+                    location="provider",
+                )
         else:
-            distilled_content, extraction_report = _render_distill_from_sections(
-                goals=structured["goals"],
-                rules=structured["rules"],
-                limits=structured["limits"],
-                prohibitions=structured["prohibitions"],
-                source_name=source_name,
-                source_meta={"host_model_used": True},
-                source_content=content,
-                mapping_strategy="host-model",
-            )
-            extraction_report.update(
-                {
-                    "extraction_source": "host-model",
-                    "fallback_from": None,
-                    "fallback_reason": None,
-                    "fallback": {
-                        "applied": False,
-                        "from": None,
-                        "reason": None,
-                    },
-                    "model_provider": model_provider,
-                    "model_name": model_name,
-                }
-            )
-            return distilled_content, extraction_report
+            model_provider, model_name = deps.provider_meta(provider_context.provider)
+            host_attempted = True
+            try:
+                structured = deps.distill_with_host_model(
+                    provider=provider_context.provider,
+                    source_name=source_name,
+                    content=content,
+                )
+                goals, rules, limits, prohibitions = _coerce_host_model_sections(structured)
+            except (deps.host_model_error_cls, ValueError, TypeError, KeyError) as error:
+                fallback_from = "host-model"
+                fallback_reason = str(error)
+            else:
+                distilled_content, extraction_report = _render_distill_from_sections(
+                    goals=goals,
+                    rules=rules,
+                    limits=limits,
+                    prohibitions=prohibitions,
+                    source_name=source_name,
+                    source_meta={"host_model_used": True},
+                    source_content=content,
+                    mapping_strategy="host-model",
+                )
+                execution_path = "host-model"
+                extraction_report.update(
+                    {
+                        "extraction_source": "host-model",
+                        "fallback_from": None,
+                        "fallback_reason": None,
+                        "fallback": {
+                            "applied": False,
+                            "from": None,
+                            "reason": None,
+                        },
+                        "model_provider": model_provider,
+                        "model_name": model_name,
+                        "execution_path": execution_path,
+                        "host_attempted": host_attempted,
+                        "host_first": _build_distill_host_first_fact(
+                            mode=mode,
+                            provider_context=provider_context,
+                            execution_path=execution_path,
+                            host_attempted=host_attempted,
+                            fallback_from=None,
+                            fallback_reason=None,
+                        ),
+                    }
+                )
+                return DistillExecutionResult(
+                    distilled_content=distilled_content,
+                    extraction_report=extraction_report,
+                    execution_path=execution_path,
+                    host_attempted=host_attempted,
+                )
 
     distilled_content, extraction_report = extract_key_information(content, source_name)
+    if fallback_from:
+        execution_path = "heuristic_fallback"
     extraction_report.update(
         {
             "extraction_source": extraction_source,
@@ -325,9 +428,72 @@ def _run_distill_extraction(
             },
             "model_provider": model_provider,
             "model_name": model_name,
+            "execution_path": execution_path,
+            "host_attempted": host_attempted,
+            "host_first": _build_distill_host_first_fact(
+                mode=mode,
+                provider_context=provider_context,
+                execution_path=execution_path,
+                host_attempted=host_attempted,
+                fallback_from=fallback_from,
+                fallback_reason=fallback_reason,
+            ),
         }
     )
-    return distilled_content, extraction_report
+    return DistillExecutionResult(
+        distilled_content=distilled_content,
+        extraction_report=extraction_report,
+        execution_path=execution_path,
+        host_attempted=host_attempted,
+    )
+
+def _build_distill_host_first_fact(
+    *,
+    mode: str,
+    provider_context: DistillProviderContext,
+    execution_path: str,
+    host_attempted: bool,
+    fallback_from: str | None,
+    fallback_reason: str | None,
+) -> dict[str, Any]:
+    return {
+        "mode": mode,
+        "host_model_allowed": mode in {"host-model", "auto"},
+        "preferred_path": "host-model" if mode in {"host-model", "auto"} else "heuristic",
+        "provider": provider_context.provider,
+        "provider_configured": provider_context.provider_configured,
+        "provider_source": provider_context.provider_source,
+        "provider_resolution_reason": provider_context.resolution_reason,
+        "host_attempted": host_attempted,
+        "selected_path": execution_path,
+        "fallback_applied": fallback_from is not None,
+        "fallback_from": fallback_from,
+        "fallback_reason": fallback_reason,
+    }
+
+
+def _coerce_host_model_sections(
+    structured: dict[str, Any],
+) -> tuple[list[str], list[str], list[str], list[str]]:
+    """验证宿主模型返回结构，避免不完整结果伪装成成功。"""
+
+    if not isinstance(structured, dict):
+        raise TypeError("host model distill result must be an object")
+
+    sections: list[list[str]] = []
+    for key in ("goals", "rules", "limits", "prohibitions"):
+        value = structured[key]
+        if not isinstance(value, list):
+            raise TypeError(f"host model distill field {key} must be a list")
+        normalized_items: list[str] = []
+        for item in value:
+            if not isinstance(item, str):
+                raise TypeError(f"host model distill field {key} must contain strings")
+            cleaned = item.strip()
+            if cleaned:
+                normalized_items.append(cleaned)
+        sections.append(normalized_items)
+    return tuple(sections)  # type: ignore[return-value]
 
 
 def extract_key_information(content: str, source_name: str) -> tuple[str, dict[str, Any]]:

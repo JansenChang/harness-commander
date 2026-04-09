@@ -2,75 +2,74 @@
 
 ## 当前状态
 
-- phase1-complete / phase2-planning
+- phase1-complete / phase2-implementation-slice
 
 ## V2 定位
 
-- `distill` 是 V2 第一批必须完成的宿主模型能力之一。
-- 当前切片目标是把它从“一次性压缩工具”推进到“可追踪知识蒸馏入口”。
-- 本轮继续保持 deterministic baseline，不切宿主模型默认主路径。
+- `distill` 是 V2 第一批必须进入宿主模型默认主路径的命令之一。
+- 当前切片目标是把它从“可选宿主模型增强工具”推进到“默认优先宿主模型、失败回退本地提炼”的知识蒸馏入口。
+- 本轮继续保持 Harness 对最终状态、产物路径、fallback 事实和来源映射结构的控制权。
 
-## 当前实现切片（Phase 1）
+## Phase 2 当前实现切片
 
-- 保持现有模式：`heuristic` / `host-model` / `auto`。
-- 保持四类提炼模型：`goals` / `rules` / `limits` / `prohibitions`。
-- 在结果协议中新增：
+- 不新增 CLI 模式，继续沿用：`heuristic` / `host-model` / `auto`。
+- 默认入口切换为现有 `auto`：
+  - provider 可用时，优先尝试宿主模型提炼。
+  - provider 缺失时，不直接命令失败，回退到 heuristic baseline。
+  - 宿主模型运行失败或返回结构不完整时，回退到 heuristic baseline。
+- 显式兼容入口继续保留：
+  - `heuristic`：强制本地规则提炼
+  - `host-model`：强制尝试宿主模型入口；provider 缺失仍是显式 failure
+- `unmatched` 与 `source_mapping_coverage` 继续保留现有 Phase 1 语义：
+  - 不新增 coverage threshold
+  - 不因为 unmatched 单独升级为 failure
+
+## 默认入口语义
+
+- 默认执行 `distill <source>` 等价于 `distill <source> --mode auto`。
+- `auto` 在本轮是唯一的 host-first 入口。
+- fallback 发生时必须显式留下：
+  - `fallback_from`
+  - `fallback_reason`
+  - warning 事实
+- fallback 不能伪装成完整成功；即使最终产物生成，结果也必须体现退化事实。
+
+## Harness 控制边界
+
+- 无论是否进入宿主模型路径，以下能力继续由 Harness 控制：
+  - 最终 `success` / `warning` / `failure` 判定
+  - 目标文件路径与写入行为
+  - `fallback_from` / `fallback_reason`
   - `extraction_report`
   - `section_sources`
   - `source_mapping_coverage`
-- 在 `*-llms.txt` 中追加最小来源映射区块，不重排主体内容。
-- `distillation_insufficient` 时：
-  - 保留失败结果与来源映射元数据
-  - 不生成正式 `*-llms.txt` 产物
+- 宿主模型只负责候选提炼内容，不负责：
+  - 产物命名
+  - 结果合同
+  - 真实 fallback 留痕
+  - unmatched 补造
 
-## deterministic baseline（本轮约束）
+## 当前非目标
 
-- 宿主模型不决定最终状态、目标路径和 fallback 语义。
-- 来源映射优先“可解释、可复核”，不追求一次性完整覆盖。
-- 条目无法可靠定位时必须标记 `unmatched`，不能伪造来源位置。
-- `health` 或评分类字段不是本轮目标，不替代原有 warning / failure 语义。
-- 失败状态不能继续落盘正式参考材料，否则会与结果语义漂移。
-
-## 本轮要解决的问题
-
-- 让提炼结果能回答“条目从哪里来”。
-- 让 unresolved section 与 fallback 事实具备统一报告结构。
-- 让下游 agent 能消费提炼结果和来源映射，而不只读纯文本摘要。
-
-## Phase 2 当前规划方向
-
-- 后续会评估把默认入口从 `heuristic` 推进到“默认优先宿主模型，失败 fallback”。
-- 即使进入 host-first 主路径，Harness 仍然控制：
-  - 最终状态
-  - 目标路径
-  - fallback 事实
-  - 来源映射结构
-- 当前 Phase 2 仍处于产品规划中，未进入实现。
+- 不新增新的 `distill` CLI 参数或第四种模式
+- 不实现增量 distill
+- 不实现跨文件聚合提炼
+- 不升级到 chunk 级引用系统
+- 不把 coverage 变成新的命令级 gate
 
 ## 与 active exec plan 对齐
 
 - Phase 1 已归档：
   - `docs/exec-plans/completed/2026-04-08-harness-commander-v2-phase1-archive/distill-source-mapping.md`
   - `docs/exec-plans/completed/2026-04-08-harness-commander-v2-phase1-archive/distill-integration-failure-coverage.md`
-- 当前 Phase 2 主计划：
+- Phase 2 主计划参考：
   - `docs/exec-plans/active/harness-commander-v2/phase2-host-model-path-planning.md`
-- 当前 Phase 2 命令级计划：
+- Phase 2 当前实现切片归档：
+  - `docs/exec-plans/completed/2026-04-08-harness-commander-v2-phase2-implementation-slice-archive.md`
+- Phase 2 命令级计划参考：
   - `docs/exec-plans/active/harness-commander-v2/distill-host-first-phase2-contracts.md`
-- 对齐 ULW：
-  - ULW 1：锁定 extraction report 协议
-  - ULW 2：四类 section 来源映射
-  - ULW 3：保持 fallback 与兼容语义
-  - ULW 4：为增量与 schema 扩展留扩展位
-
-## 当前非目标
-
-- 不实现增量 distill。
-- 不引入跨文件聚合提炼。
-- 不改变四类 section 基础模型。
-- 不切换到宿主模型默认优先主路径。
 
 ## 当前开放问题
 
-- 来源映射后续是否需要升级到 chunk 级而不只是行号/位置级？
-- `next` 阶段是否要把 `section_sources` 输出标准化为可重放任务包？
-- 增量 distill 时如何处理历史映射失效和冲突合并？
+- 后续是否需要把 `section_sources` 升级为更细粒度引用，而不只是当前 line/unmatched 级别
+- 增量 distill 时如何处理历史映射失效与合并冲突

@@ -8,13 +8,12 @@
 
 ## 当前状态
 
-- 状态：phase1-complete / phase2-planning
+- 状态：phase1-complete / phase2-implementation-slice-archived
 - 基线来源：V1 已实现命令集
 - 当前完成：`run-agents + check + distill` 最小闭环与 deterministic baseline
-- 当前规划中：`run-agents + distill` 默认优先宿主模型主路径
-- 当前已启动的命令级规划：
-  - `docs/exec-plans/active/harness-commander-v2/run-agents-host-model-phase2-contracts.md`
-  - `docs/exec-plans/active/harness-commander-v2/distill-host-first-phase2-contracts.md`
+- 当前已归档的命令级切片：
+  - `docs/exec-plans/completed/2026-04-08-harness-commander-v2-phase2-implementation-slice-archive/run-agents-host-model-phase2-contracts.md`
+  - `docs/exec-plans/completed/2026-04-08-harness-commander-v2-phase2-implementation-slice-archive/distill-host-first-phase2-contracts.md`
 - 后续目标：推进宿主模型默认优先主路径与更强的治理联动
 
 ## 产品开发进度
@@ -24,22 +23,29 @@
   - 已归档为正式基线
 - Phase 2 总规划：
   - 已完成宿主模型主路径的顶层问题拆解
-  - 已拆成 `run-agents` 与 `distill` 两份命令级 active plan
+  - 已拆成 `run-agents` 与 `distill` 两份命令级切片，并完成当前实现归档
 - Phase 2 当前推进：
-  - 优先收敛 `run-agents` 的入口条件、宿主模型合同与 fallback 状态矩阵
-  - 第二顺位收敛 `distill` 的默认入口、provider prerequisite 与 coverage 通过语义
+  - `run-agents` 当前 implementation slice 已完成并归档
+  - `distill` 当前 implementation slice 已完成并归档
+  - 下一步是重新选择产品缺陷范围，而不是继续扩当前切片
 - 当前边界：
-  - 仍处于产品/协议收敛阶段
-  - 尚未进入 Phase 2 实现与测试矩阵补齐
+  - `run-agents` 已进入、完成并归档当前 Phase 2 implementation slice
+  - `distill` 已进入、完成并归档当前 Phase 2 implementation slice
 
 ## Phase 2 当前规划焦点
 
 - `run-agents`
+  - 采用“四角色 / 四槽位协作 + Harness 独占 check / pr-summary”的统一口径
+  - 四槽位固定为 `requirements -> plan -> implement -> verify`
   - 只开放 `requirements` 与 `plan` 给宿主模型默认主路径
-  - 继续由 Harness 控制 `check` preflight、verify、最终状态与阶段合同
+  - 已锁定默认按 provider eligibility 评估 host-first，不新增新的 CLI 模式门
+  - 已锁定 Phase 2 保持结构化摘要合同，不升级为可重放任务包
+  - 继续由 Harness 独占控制 `check` preflight、`pr-summary`、verify 判定、最终状态与阶段合同
 - `distill`
-  - 评估默认入口是否从 `heuristic` 切到 host-first / auto
-  - 明确 provider prerequisite、fallback 事实与来源映射兼容边界
+  - 默认入口已收敛为现有 `auto`
+  - provider 缺失时回退到 heuristic，而不是直接命令失败
+  - 显式 `host-model` 仍保持严格 provider prerequisite
+  - 继续保持来源映射兼容边界，不新增 coverage gate
 - `check`
   - 当前不进入 Phase 2 宿主模型主路径
   - 仅保留后续更强治理联动的评估入口
@@ -57,6 +63,9 @@
   - `run-agents`
 - `run-agents` 的宿主模型接入范围：
   - 只限 `requirements` 与 `plan` 阶段
+- `run-agents` 的协作口径：
+  - 四角色 / 四槽位：`requirements`、`plan`、`implement`、`verify`
+  - Harness 独占：`check`、`pr-summary`
 - `check` 的定位：
   - 治理完整性入口
 - `collect-evidence` 的定位：
@@ -108,13 +117,16 @@
   - 第一阶段：默认不用宿主模型，先保证 deterministic baseline
   - 第二阶段：`distill` 与 `run-agents` 默认优先宿主模型，失败回退到本地规则路径
 - `run-agents` 即使进入宿主模型主路径，也只让宿主模型接管 `requirements` 与 `plan`，不接管 `verify`、最终状态和阻断逻辑。
+- `run-agents` 在 Phase 2 仍不是并发 agent runtime，而是 Harness 编排的顺序四槽位协作工作流。
 - `distill` 是给下游大模型读取时使用的能力，但不替代 `design-docs/` 与 `product-specs/` 作为正式规则源。
 - 无论是否进入宿主模型主路径，Harness 都继续控制最终状态、产物路径、阻断逻辑和 fallback 事实。
 
 ## 宿主模型永不接管的能力
 
 - 最终通过 / 失败状态
+- `check` 执行权
 - verify 阻断判断
+- `pr-summary` 执行权
 - 产物路径与命名
 - fallback 是否发生及其记录方式
 - provider 配置事实源
@@ -169,7 +181,7 @@
 - 把宿主模型能力限制在 Harness 可控的边界内
 - `run-agents` 仅开放 `requirements` 与 `plan` 给宿主模型主路径
 
-当前状态：产品规划中
+当前状态：`run-agents` implementation slice 已落地，`distill` implementation slice 已启动
 
 ### Phase 3
 

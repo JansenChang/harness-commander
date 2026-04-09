@@ -2,73 +2,70 @@
 
 ## 当前状态
 
-- active（Phase 1）
+- active（Phase 2 implementation slice）
 
 ## 测试目标
 
-- 验证 `distill` 在保留既有模式和 fallback 语义的前提下，新增来源映射与 extraction report。
-- 验证 `unmatched` 语义稳定，不伪造来源定位。
-- 验证 `*-llms.txt` 产物包含来源映射区块。
+- 验证 `distill` 默认入口已切到 `auto`
+- 验证 `auto` 在 provider 可用时优先宿主模型
+- 验证 `auto` 在 provider 缺失或宿主模型结果不可用时稳定 fallback
+- 验证显式 `heuristic` / `host-model` 兼容入口不回归
+- 验证来源映射、summary、artifact、fallback 事实保持一致
 
 ## 分层策略
 
 - CLI 测试：
-  - 校验新增 `meta` 字段结构
-  - 校验 heuristic / host-model / auto 下来源映射语义
-  - 校验 fallback 兼容字段未回归
-  - 校验 summary 与 warning / dry-run artifact 事实一致
+  - 锁默认 `auto` 的成功路径与 fallback 路径
+  - 锁显式 `heuristic` 的 deterministic baseline
+  - 锁显式 `host-model` 的 provider 边界
+  - 锁 `execution_path` / `host_attempted` / `host_first` 留痕
 - Integration 测试：
-  - 校验真实文件提炼后的映射覆盖统计
-  - 校验 host-model 失败回退路径下报告一致性
-  - 校验真实 failure / edge path 下稳定错误协议不漂移
-  - 校验输出参考材料中的来源映射区块
-  - 校验 dry-run 下 summary 不伪造正式落盘
+  - 锁真实入口链路下默认 `auto` 的 provider 读取与 baseline 降级
+  - 锁 `distillation_insufficient` 的真实 failure 协议
+  - 锁 dry-run / artifact / summary 一致性
+  - 锁 `*-llms.txt` 中来源映射区块仍可读
 
-## Phase 1 必测场景
+## 必测场景
 
-### heuristic 场景
+### 默认 `auto`
 
-- 输入含明确 section 文本时：
-  - `section_sources` 存在且有可定位项
-  - `source_mapping_coverage.total_items > 0`
-  - `extraction_report.mapping_summary` 与 coverage 一致
+- provider 可用时：
+  - `meta.distill_mode = auto`
+  - `meta.extraction_source = host-model`
+  - `fallback_from = null`
+  - `execution_path = host-model`
+- provider 缺失时：
+  - `meta.distill_mode = auto`
+  - `meta.extraction_source = heuristic`
+  - `fallback_from = host-model`
+  - `fallback_reason = provider_not_configured`
+  - `execution_path = heuristic_fallback`
+  - 命令级至少为 `warning`
+- 宿主模型失败或结构不完整时：
+  - 继续回退到 heuristic
+  - warning 与 meta fallback 事实一致
 
-### host-model / auto 场景
+### 显式兼容入口
 
-- host-model 成功时：
-  - 结果包含 `extraction_report`
-  - 允许出现 `unmatched`，但不得伪造来源位置
-- auto fallback 时：
-  - 保留 `fallback_from=host-model`
-  - 来源映射字段仍存在且结构完整
+- `--mode heuristic`：
+  - 继续返回 heuristic 提炼结果
+  - 来源映射与 coverage 语义不回归
+- `--mode host-model`：
+  - provider 可用时成功
+  - provider 缺失时稳定 `failure`
 
-### 不足提炼场景
+### 失败与产物
 
-- `distillation_insufficient` 时：
-  - 仍返回来源映射结构（可为空或 unmatched）
-  - 不改变既有 failure 判定语义
-  - integration 层也必须锁住该 failure 结果，不只在 CLI 层断言
-  - 不生成正式 `*-llms.txt` artifact，也不真实落盘
-
-### provider / mode 边界场景
-
-- `host-model` 缺少 provider 时：
-  - 返回 `provider_not_configured`
-  - integration 层必须验证真实入口链路下错误码和 message 稳定
-- 若后续补 `invalid_distill_mode`：
-  - CLI 与 integration 都要共享同一份 failure 事实，不允许只测一层
-
-## 兼容性断言
-
-- 保留并继续断言：
-  - `distill_mode`
-  - `extraction_source`
-  - `fallback_from`
-  - `fallback_reason`
-- 新字段与既有字段语义一致，不冲突。
+- `distillation_insufficient`：
+  - 命令 `failure`
+  - 结构化映射字段仍存在
+  - 无正式 artifact 落盘
+- dry-run：
+  - `artifacts` 返回 `would_create` / `would_overwrite`
+  - `summary` 不伪造正式写入
 
 ## 非目标测试
 
-- 本轮不测试增量 distill。
-- 本轮不测试跨文件聚合提炼。
-- 本轮不测试宿主模型默认优先主路径。
+- 本轮不测试增量 distill
+- 本轮不测试跨文件聚合提炼
+- 本轮不测试 chunk 级来源引用系统

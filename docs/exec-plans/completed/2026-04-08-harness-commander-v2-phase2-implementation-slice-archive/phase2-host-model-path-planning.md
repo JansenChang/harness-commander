@@ -13,10 +13,7 @@
 - `docs/product-specs/v2/index.md` 已明确：
   - Phase 2 目标是让 `distill` 与 `run-agents` 进入默认优先宿主模型主路径
   - `run-agents` 只开放 `requirements` 与 `plan` 给宿主模型
-- 当前仓库已经把首批 Phase 2 implementation slice 落到代码、测试和文档：
-  - `run-agents`
-  - `distill`
-- 下一步不再是继续扩当前切片，而是基于归档结果重新选择下一轮范围。
+- 当前仓库还没有把 Phase 2 的产品范围、输入输出、fallback 语义与非目标统一写成 active plan。
 
 ## Business Logic
 
@@ -24,8 +21,8 @@
   - 默认优先宿主模型的入口条件是什么
   - fallback 发生时哪些事实必须稳定保留
   - `run-agents` / `distill` 的宿主模型输出应以什么结构被 Harness 消费
-- 本轮规划已经完成首批实现切片落地。
-- 当前这份主计划继续保留为 Phase 2 顶层参考，但不再代表“尚未进入实现”。
+- 本轮先做产品规划，不直接进入实现。
+- 只有在产品边界写清之后，后续实现才不会把宿主模型接入做成协议漂移或状态漂移。
 
 ## 当前收敛的产品问题
 
@@ -52,15 +49,15 @@
 - 明确 Phase 2 的最小闭环与非目标
 - 为命令级 Phase 2 active plans 提供输入
 
-## 已拆解的命令级切片
+## 已拆解的命令级 active plans
 
 - `run-agents-host-model-phase2-contracts.md`
   - 收敛 `requirements` / `plan` 的 host-first 启动条件、阶段合同与状态矩阵
 - `distill-host-first-phase2-contracts.md`
   - 收敛默认入口、provider prerequisite、fallback 语义与来源映射通过边界
-- 当前状态：
-  - `run-agents` 当前 implementation slice 已完成并归档
-  - `distill` 当前 implementation slice 已完成并归档
+- 当前拆解顺序：
+  - 先收敛 `run-agents`
+  - 再收敛 `distill`
 
 ## Non-Goals
 
@@ -125,7 +122,7 @@
 ## Acceptance Criteria
 
 - Phase 2 的产品目标、最小闭环、宿主模型边界与非目标写成仓库事实源。
-- `run-agents` 与 `distill` 的 Phase 2 规划已拆成命令级切片，并已完成当前 implementation slice 归档。
+- `run-agents` 与 `distill` 的 Phase 2 规划已拆成命令级 active plans，并可继续推进命令级合同收敛。
 - 不需要再靠对话补充 Phase 2 基本边界。
 
 ## Exception Handling
@@ -136,7 +133,7 @@
 ## Verification
 
 - 检查 `docs/product-specs/v2/index.md` 与命令级产品文档是否对齐
-- 检查 active index 是否已从“implementation landed”切到“archived awaiting next scope”
+- 检查 active index 是否已从 Phase 1 完成态切换为 Phase 2 规划态
 - 检查是否仍存在“宿主模型默认优先”只在对话里、未写入仓库的问题
 
 ## References

@@ -157,7 +157,7 @@ def run_distill(
     *,
     source_path: str,
     dry_run: bool,
-    mode: str = "heuristic",
+    mode: str = "auto",
     provider: str | None = None,
 ) -> CommandResult:
     """将长文档压缩为参考材料。"""
