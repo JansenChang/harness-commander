@@ -16,6 +16,7 @@ build/
 .mypy_cache/
 .ruff_cache/
 .claude/
+.harness/provider-config.json
 
 # Generated evidence
 docs/generated/evidence/
